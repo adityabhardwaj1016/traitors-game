@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Traitors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<div class="grain"></div>
+<div class="embers" id="embers"></div>
+
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">†</span> TRAITORS</div>
+  <div class="badges">
+    <div id="hostBadge" class="host-badge hidden">🕯 Host: <span id="hostBadgeName">—</span></div>
+    <div id="roomBadge" class="room-badge hidden">
+      ROOM <span id="roomCodeText">----</span>
+      <button id="btnCopyCode" class="copy-btn" title="Copy room code">⧉</button>
+    </div>
+  </div>
+</header>
+
+<main id="app">
+
+  <!-- ===== ENTRY SCREEN ===== -->
+  <section id="screen-entry" class="screen">
+    <div class="panel entry-panel">
+      <h1 class="title">Trust no one.</h1>
+      <p class="subtitle">A game of hidden allegiance. Gather your circle — one among you is not what they seem, and no one picks their role until everyone has arrived.</p>
+
+      <div class="tabs">
+        <button class="tab active" data-tab="create">Create Room</button>
+        <button class="tab" data-tab="join">Join Room</button>
+      </div>
+
+      <div id="tab-create" class="tab-panel active">
+        <label class="field-label">Your name</label>
+        <input id="hostName" class="input" maxlength="18" placeholder="e.g. Aditya" />
+        <button id="btnCreate" class="btn btn-primary">Create Room</button>
+        <p class="tiny-hint">You'll get a room code to share. Everyone — including you — is just a player until the game begins.</p>
+      </div>
+
+      <div id="tab-join" class="tab-panel">
+        <label class="field-label">Room code</label>
+        <input id="joinCode" class="input mono" maxlength="5" placeholder="ABCDE" />
+        <label class="field-label">Your name</label>
+        <input id="joinName" class="input" maxlength="18" placeholder="e.g. Priya" />
+        <button id="btnJoin" class="btn btn-primary">Join Room</button>
+      </div>
+
+      <p id="entryError" class="error-text hidden"></p>
+    </div>
+  </section>
+
+  <!-- ===== LOBBY ===== -->
+  <section id="screen-lobby" class="screen hidden">
+    <div class="panel">
+      <h2 class="section-title">The Gathering</h2>
+      <p class="muted">Share the room code below. Once at least four have arrived, the circle can be sealed — the game will secretly draw a host from among you.</p>
+      <div id="playerCount" class="player-count">0 gathered</div>
+      <div id="playerList" class="player-list"></div>
+      <button id="btnStartGame" class="btn btn-primary hidden">Seal the Circle</button>
+      <p id="lobbyHint" class="muted small">Waiting for the room's creator to begin… (minimum 4 players)</p>
+    </div>
+  </section>
+
+  <!-- ===== HOST DRAW REVEAL (everyone sees this briefly) ===== -->
+  <section id="screen-host-announce" class="screen hidden">
+    <div class="panel center-panel host-reveal-panel">
+      <div class="wax-seal">🕯</div>
+      <p class="eyebrow">The circle has been sealed</p>
+      <h2 class="section-title accent-gold">A host has been drawn</h2>
+      <p class="host-reveal-name" id="hostAnnounceName">—</p>
+      <p class="muted small">They alone will guide the night — and choose who among you walks the Traitor's path.</p>
+    </div>
+  </section>
+
+  <!-- ===== SELECT TRAITOR (host only) ===== -->
+  <section id="screen-select" class="screen hidden">
+    <div class="panel">
+      <h2 class="section-title accent-red">Choose the Traitor</h2>
+      <p class="muted">Only you will know who you pick. Choose in secret — the fate of the circle rests on it.</p>
+      <div id="selectList" class="player-list selectable"></div>
+    </div>
+  </section>
+
+  <!-- ===== WAITING (non-host, generic) ===== -->
+  <section id="screen-waiting" class="screen hidden">
+    <div class="panel center-panel">
+      <div class="pulse-icon">●</div>
+      <p id="waitingText" class="muted">Waiting on the others…</p>
+    </div>
+  </section>
+
+  <!-- ===== NIGHT (traitor picks victim) ===== -->
+  <section id="screen-night-traitor" class="screen hidden">
+    <div class="panel">
+      <h2 class="section-title accent-red">Night Falls</h2>
+      <p class="muted">🗡 You are the Traitor. Choose who to eliminate tonight.</p>
+      <div id="killList" class="player-list selectable"></div>
+    </div>
+  </section>
+
+  <!-- ===== NIGHT (everyone else) ===== -->
+  <section id="screen-night-wait" class="screen hidden">
+    <div class="panel center-panel">
+      <div class="pulse-icon red">☾</div>
+      <p class="muted">Night has fallen. Someone is choosing a victim…</p>
+    </div>
+  </section>
+
+  <!-- ===== HOST: kill confirmed, needs to reveal ===== -->
+  <section id="screen-host-reveal" class="screen hidden">
+    <div class="panel">
+      <h2 class="section-title accent-red">The Traitor Has Struck</h2>
+      <p class="muted">Victim chosen: <strong id="hostVictimName">—</strong></p>
+      <button id="btnReveal" class="btn btn-primary">Reveal to Everyone</button>
+    </div>
+  </section>
+
+  <!-- ===== DISCUSSION ===== -->
+  <section id="screen-discussion" class="screen hidden">
+    <div class="panel">
+      <h2 class="section-title">Discussion</h2>
+      <p id="discussionVictim" class="muted"></p>
+      <div id="discussionPlayers" class="player-list"></div>
+      <button id="btnStartVoting" class="btn btn-primary hidden">Move to Voting</button>
+      <p id="discussionHint" class="muted small hidden">Waiting for the host to open voting…</p>
+      <div class="chat-box">
+        <div id="chatLog" class="chat-log"></div>
+        <div class="chat-input-row">
+          <input id="chatInput" class="input" placeholder="Say something…" maxlength="300"/>
+          <button id="btnChatSend" class="btn btn-small">Send</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== VOTING ===== -->
+  <section id="screen-voting" class="screen hidden">
+    <div class="panel">
+      <h2 class="section-title accent-gold">Cast Your Vote</h2>
+      <p class="muted"><span id="votesInCount">0</span> / <span id="aliveCount">0</span> votes in</p>
+      <div class="vote-progress"><div id="voteProgressBar" class="vote-progress-bar"></div></div>
+      <div id="votingList" class="player-list selectable"></div>
+      <p id="votedNotice" class="muted small hidden">Vote locked in. Waiting on the others…</p>
+    </div>
+  </section>
+
+  <!-- ===== GAME OVER ===== -->
+  <section id="screen-gameover" class="screen hidden">
+    <div class="panel center-panel">
+      <h2 id="gameOverTitle" class="section-title">Game Over</h2>
+      <p id="gameOverText" class="muted"></p>
+      <div id="finalLog" class="event-log"></div>
+    </div>
+  </section>
+
+  <!-- shared event ticker -->
+  <div id="eventTicker" class="event-ticker hidden"></div>
+
+</main>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

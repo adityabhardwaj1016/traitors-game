@@ -132,6 +132,34 @@ body {
 .copy-btn:hover { border-color: var(--gold); color: var(--gold-bright); }
 .copy-btn.copied { border-color: var(--gold); color: var(--gold-bright); }
 
+.sound-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.sound-btn:hover { border-color: var(--gold); color: var(--gold-bright); }
+.sound-btn.on { border-color: rgba(199,162,74,0.4); color: var(--gold-bright); background: rgba(199,162,74,0.08); }
+
+.spectator-badge {
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  background: rgba(139,143,163,0.08);
+  padding: 6px 12px;
+  border-radius: 999px;
+}
+
 #app {
   position: relative;
   z-index: 2;
@@ -421,6 +449,83 @@ body {
 @keyframes ticker-in {
   from { opacity: 0; transform: translateX(-50%) translateY(8px); }
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+/* ---- kill / elimination overlay ---- */
+.kill-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.kill-overlay.hidden { display: none; }
+
+.kill-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(179,35,27,0.55), rgba(11,13,18,0.94) 70%);
+  animation: kill-flash-anim 2.3s ease forwards;
+}
+@keyframes kill-flash-anim {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  75% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.kill-content {
+  position: relative;
+  text-align: center;
+  animation: kill-content-anim 2.3s ease forwards;
+}
+@keyframes kill-content-anim {
+  0% { opacity: 0; transform: scale(0.85); }
+  12% { opacity: 1; transform: scale(1.08); }
+  22% { transform: scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.dagger {
+  font-size: 64px;
+  filter: drop-shadow(0 0 20px rgba(225,75,63,0.8));
+  animation: dagger-strike 0.5s ease;
+}
+@keyframes dagger-strike {
+  0% { transform: translateY(-50px) rotate(-35deg); opacity: 0; }
+  60% { transform: translateY(6px) rotate(10deg); opacity: 1; }
+  100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+}
+
+.kill-text {
+  font-family: var(--font-display);
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--red-bright);
+  margin-top: 14px;
+  letter-spacing: 0.02em;
+}
+.kill-subtext { color: var(--muted); font-size: 14px; margin-top: 8px; }
+
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 2px); }
+  40% { transform: translate(4px, -2px); }
+  60% { transform: translate(-3px, 1px); }
+  80% { transform: translate(3px, -1px); }
+}
+body.shake { animation: screen-shake 0.4s ease; }
+
+.chat-input-row .input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.chat-input-row button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* winner celebration accents */

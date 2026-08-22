@@ -16,6 +16,8 @@
 <header class="topbar">
   <div class="brand"><span class="brand-mark">†</span> TRAITORS</div>
   <div class="badges">
+    <button id="btnSound" class="sound-btn" title="Toggle ambient sound">🔇</button>
+    <div id="spectatorBadge" class="spectator-badge hidden">👻 Spectating</div>
     <div id="hostBadge" class="host-badge hidden">🕯 Host: <span id="hostBadgeName">—</span></div>
     <div id="roomBadge" class="room-badge hidden">
       ROOM <span id="roomCodeText">----</span>
@@ -165,6 +167,17 @@
 
 </main>
 
+<!-- full-screen kill/elimination animation, triggered on night deaths and vote-outs -->
+<div id="killOverlay" class="kill-overlay hidden">
+  <div class="kill-flash"></div>
+  <div class="kill-content">
+    <div class="dagger">🗡</div>
+    <div class="kill-text" id="killOverlayText">—</div>
+    <div class="kill-subtext" id="killOverlaySubtext"></div>
+  </div>
+</div>
+
+<script src="/static/audio.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

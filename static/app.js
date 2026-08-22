@@ -9,6 +9,7 @@ let me = { roomCode: null, playerId: null, name: null, isCreator: false, isTrait
 let state = null; // last "state" message from server
 let hasVoted = false;
 let pendingHostReveal = null; // { id, name } while the host-draw animation is showing
+let lastPhase = null; // used to fire phase-transition side effects (music, stings) only once
 
 // ---- persistence (survive refresh) ----------------------------------------
 function saveSession() {
@@ -155,6 +156,7 @@ function handleMessage(msg) {
       state = msg;
       hasVoted = false; // reset on any fresh state broadcast that isn't mid-vote counting UI
       updateHostBadge();
+      updateSpectatorBadge();
       if (pendingHostReveal) {
         // Let the reveal animation play out before switching to the next screen.
         setTimeout(() => { pendingHostReveal = null; render(); }, 2400);
@@ -179,9 +181,16 @@ function handleMessage(msg) {
       showScreen("screen-host-reveal");
       break;
     case "night_reveal":
+      playKillOverlay({ name: msg.victim_name, isMe: msg.victim_id === me.playerId, cause: "night" });
       ticker(`☠ ${msg.victim_name} was found dead this morning.`);
       break;
     case "vote_result":
+      playKillOverlay({
+        name: msg.eliminated_name,
+        isMe: msg.eliminated_id === me.playerId,
+        cause: "vote",
+        wasTraitor: msg.was_traitor,
+      });
       const verdict = msg.was_traitor ? "was the Traitor!" : "was NOT the Traitor.";
       ticker(`🗳 ${msg.eliminated_name} ${verdict}`);
       break;
@@ -202,6 +211,48 @@ function updateHostBadge() {
   } else {
     badge.classList.add("hidden");
   }
+}
+
+// ---- spectator status: eliminated players stay in the game, just can't act ----
+function amSpectating() {
+  if (!state) return false;
+  const myPlayer = state.players.find((p) => p.id === me.playerId);
+  return !!(myPlayer && !myPlayer.is_host && !myPlayer.alive);
+}
+
+function updateSpectatorBadge() {
+  const badge = $("spectatorBadge");
+  const spectating = amSpectating();
+  badge.classList.toggle("hidden", !spectating);
+
+  const chatInput = $("chatInput");
+  const chatBtn = $("btnChatSend");
+  chatInput.disabled = spectating;
+  chatBtn.disabled = spectating;
+  chatInput.placeholder = spectating ? "Spectators can't send messages" : "Say something…";
+}
+
+// ---- kill / elimination animation --------------------------------------
+function playKillOverlay({ name, isMe, cause, wasTraitor }) {
+  const overlay = $("killOverlay");
+  const textEl = $("killOverlayText");
+  const subEl = $("killOverlaySubtext");
+
+  if (isMe) {
+    textEl.textContent = "You have been eliminated";
+    subEl.textContent = "You'll stay in the game as a spectator — silent, but watching.";
+  } else {
+    textEl.textContent = `${name} has fallen`;
+    subEl.textContent = cause === "vote"
+      ? (wasTraitor ? "They were the Traitor." : "They were not the Traitor.")
+      : "Struck down in the night.";
+  }
+
+  overlay.classList.remove("hidden");
+  document.body.classList.add("shake");
+  if (window.TraitorsAudio) TraitorsAudio.playKill();
+  setTimeout(() => document.body.classList.remove("shake"), 450);
+  setTimeout(() => overlay.classList.add("hidden"), 2300);
 }
 
 function ticker(text) {
@@ -235,6 +286,20 @@ function showScreen(id) {
 
 function render() {
   if (!state) return;
+
+  // Fire phase-transition audio cues exactly once per transition, not on
+  // every state broadcast (which can arrive many times within one phase).
+  if (state.phase !== lastPhase) {
+    const enteringGameOver = state.phase === "GAME_OVER";
+    lastPhase = state.phase;
+    if (window.TraitorsAudio) {
+      TraitorsAudio.setPhase(state.phase);
+      if (enteringGameOver) {
+        if (state.winner === "traitor") TraitorsAudio.playLose();
+        else TraitorsAudio.playWin();
+      }
+    }
+  }
 
   const myPlayer = state.players.find((p) => p.id === me.playerId);
   const amAlive = myPlayer ? myPlayer.alive : true;
@@ -400,6 +465,7 @@ function renderVotingList(players) {
     row.addEventListener("click", () => {
       hasVoted = true;
       send({ type: "cast_vote", target_id: p.id });
+      if (window.TraitorsAudio) TraitorsAudio.playVote();
       render();
     });
     el.appendChild(row);
@@ -429,6 +495,22 @@ function sendChat() {
   if (!text) return;
   send({ type: "chat", text });
   input.value = "";
+}
+
+// ---- ambient sound toggle --------------------------------------------
+if (window.TraitorsAudio) {
+  TraitorsAudio.init();
+  const soundBtn = $("btnSound");
+  const syncSoundBtn = () => {
+    const muted = TraitorsAudio.isMuted();
+    soundBtn.textContent = muted ? "🔇" : "🔊";
+    soundBtn.classList.toggle("on", !muted);
+  };
+  syncSoundBtn();
+  soundBtn.addEventListener("click", () => {
+    TraitorsAudio.toggleMute();
+    syncSoundBtn();
+  });
 }
 
 // ---- auto-reconnect on refresh -------------------------------------------

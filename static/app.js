@@ -5,11 +5,21 @@
 const $ = (id) => document.getElementById(id);
 
 let ws = null;
-let me = { roomCode: null, playerId: null, name: null, isCreator: false, isTraitor: null };
+let me = { roomCode: null, playerId: null, name: null, isCreator: false, isTraitor: null, locations: [] };
 let state = null; // last "state" message from server
 let hasVoted = false;
 let pendingHostReveal = null; // { id, name } while the host-draw animation is showing
 let lastPhase = null; // used to fire phase-transition side effects (music, stings) only once
+
+// ---- Night kill selection (Traitor) ----
+let selectedKillTarget = null;
+let selectedKillLocation = null;
+
+// ---- Investigation phase local UI state ----
+let selectedAlibi = null;
+let selectedInspectTarget = null;
+let clueLogEntries = []; // { targetName, clue } — this round's private inspection results
+let sabotageNoticeText = "";
 
 // ---- persistence (survive refresh) ----------------------------------------
 function saveSession() {
@@ -30,7 +40,7 @@ function isMeHost() {
   return !!(state && state.host_id && state.host_id === me.playerId);
 }
 
-// ---- ambient embers --------------------------------------------------
+// ---- ambient embers ---------------------------------------------------
 (function spawnEmbers() {
   const container = $("embers");
   const count = 22;
@@ -86,7 +96,7 @@ $("btnCreate").addEventListener("click", async () => {
     });
     if (!res.ok) throw new Error((await res.json()).detail || "Failed to create room");
     const data = await res.json();
-    me = { roomCode: data.room_code, playerId: data.player_id, name, isCreator: true, isTraitor: null };
+    me = { roomCode: data.room_code, playerId: data.player_id, name, isCreator: true, isTraitor: null, locations: [] };
     saveSession();
     connect();
   } catch (e) {
@@ -106,7 +116,7 @@ $("btnJoin").addEventListener("click", async () => {
     });
     if (!res.ok) throw new Error((await res.json()).detail || "Failed to join room");
     const data = await res.json();
-    me = { roomCode: data.room_code, playerId: data.player_id, name, isCreator: false, isTraitor: null };
+    me = { roomCode: data.room_code, playerId: data.player_id, name, isCreator: false, isTraitor: null, locations: [] };
     saveSession();
     connect();
   } catch (e) {
@@ -174,6 +184,7 @@ function handleMessage(msg) {
       break;
     case "you_are_traitor":
       me.isTraitor = msg.is_traitor;
+      if (msg.locations) me.locations = msg.locations;
       saveSession();
       break;
     case "host_kill_notice":
@@ -182,7 +193,24 @@ function handleMessage(msg) {
       break;
     case "night_reveal":
       playKillOverlay({ name: msg.victim_name, isMe: msg.victim_id === me.playerId, cause: "night" });
-      ticker(`☠ ${msg.victim_name} was found dead this morning.`);
+      ticker(`☠ ${msg.victim_name} was found dead in ${msg.crime_location}.`);
+      break;
+    case "investigation_start":
+      // Fresh round of investigation: reset all local UI state for it.
+      me.myTrueLocation = msg.your_location;
+      me.locations = msg.locations;
+      selectedAlibi = null;
+      selectedInspectTarget = null;
+      clueLogEntries = [];
+      sabotageNoticeText = "";
+      break;
+    case "inspect_result":
+      clueLogEntries.push({ targetName: msg.target_name, clue: msg.clue });
+      render();
+      break;
+    case "sabotage_confirmed":
+      sabotageNoticeText = `Cover arranged for ${msg.target_name} — inspections of them will come back clean this round.`;
+      render();
       break;
     case "vote_result":
       playKillOverlay({
@@ -287,7 +315,7 @@ function showScreen(id) {
 function render() {
   if (!state) return;
 
-  // Fire phase-transition audio cues exactly once per transition, not on
+  // Fire phase-transition side effects exactly once per transition, not on
   // every state broadcast (which can arrive many times within one phase).
   if (state.phase !== lastPhase) {
     const enteringGameOver = state.phase === "GAME_OVER";
@@ -333,6 +361,8 @@ function render() {
       if (me.isTraitor) {
         showScreen("screen-night-traitor");
         renderKillList(state.players.filter((p) => p.id !== me.playerId && p.alive && !p.is_host));
+        renderKillLocationChips();
+        updateKillConfirmButton();
       } else if (amHost) {
         showScreen("screen-waiting");
         $("waitingText").textContent = "Waiting for the Traitor to strike…";
@@ -349,11 +379,25 @@ function render() {
       }
       break;
 
+    case "INVESTIGATION":
+      if (amHost) {
+        showScreen("screen-investigation-host");
+        $("invAlibiCount").textContent = state.alibi_submitted_ids.length;
+        $("invAliveCount").textContent = state.alive_count;
+        $("invInspectCount").textContent = state.investigations_used;
+      } else {
+        showScreen("screen-investigation");
+        renderInvestigationScreen(amAlive);
+      }
+      break;
+
     case "DISCUSSION":
       showScreen("screen-discussion");
       $("discussionVictim").textContent = state.victim_name
         ? `Last night, ${state.victim_name} was eliminated.`
         : "No one was eliminated last night.";
+      renderEvidenceBoard();
+      renderMyClueNotes();
       renderPlayerList("discussionPlayers", state.players, true);
       if (amHost) {
         $("btnStartVoting").classList.remove("hidden");
@@ -444,15 +488,158 @@ function renderKillList(players) {
   el.innerHTML = "";
   players.forEach((p) => {
     const row = document.createElement("div");
-    row.className = "player-row";
+    row.className = "player-row" + (selectedKillTarget === p.id ? " chosen" : "");
     row.innerHTML = `<div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
     row.addEventListener("click", () => {
-      document.querySelectorAll("#killList .player-row").forEach((r) => r.classList.remove("chosen"));
-      row.classList.add("chosen");
-      send({ type: "traitor_kill", target_id: p.id });
+      selectedKillTarget = p.id;
+      renderKillList(players);
+      updateKillConfirmButton();
     });
     el.appendChild(row);
   });
+}
+
+function renderKillLocationChips() {
+  renderChips("killLocationList", me.locations || [], selectedKillLocation, (loc) => {
+    selectedKillLocation = loc;
+    renderKillLocationChips();
+    updateKillConfirmButton();
+  });
+}
+
+function updateKillConfirmButton() {
+  $("btnConfirmKill").disabled = !(selectedKillTarget && selectedKillLocation);
+}
+
+$("btnConfirmKill").addEventListener("click", () => {
+  if (!selectedKillTarget || !selectedKillLocation) return;
+  send({ type: "traitor_kill", target_id: selectedKillTarget, location: selectedKillLocation });
+});
+
+// Generic single-select chip row (used for kill location + alibi claim).
+function renderChips(containerId, options, selectedValue, onPick) {
+  const el = $(containerId);
+  el.innerHTML = "";
+  options.forEach((loc) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "chip" + (loc === selectedValue ? " selected" : "");
+    chip.textContent = loc;
+    chip.addEventListener("click", () => onPick(loc));
+    el.appendChild(chip);
+  });
+}
+
+function renderInvestigationScreen(amAlive) {
+  $("myTrueLocation").textContent = me.myTrueLocation || "—";
+
+  const alibiSubmitted = !!(state && state.my_alibi_submitted);
+  const hasInspected = !!(state && state.my_has_inspected);
+
+  // --- alibi claim ---
+  if (alibiSubmitted) {
+    $("alibiChips").innerHTML = "";
+    $("alibiLockedNotice").classList.remove("hidden");
+  } else {
+    $("alibiLockedNotice").classList.add("hidden");
+    renderChips("alibiChips", me.locations || [], selectedAlibi, (loc) => {
+      selectedAlibi = loc;
+      send({ type: "submit_alibi", location: loc });
+    });
+  }
+
+  // --- inspect ---
+  const inspectSection = $("inspectSection");
+  if (me.isTraitor) {
+    inspectSection.classList.add("hidden");
+  } else {
+    inspectSection.classList.remove("hidden");
+    if (hasInspected) {
+      $("inspectList").innerHTML = '<p class="muted small">Investigation used for this round.</p>';
+    } else {
+      const targets = state.players.filter((p) => p.id !== me.playerId && p.alive && !p.is_host);
+      const el = $("inspectList");
+      el.innerHTML = "";
+      targets.forEach((p) => {
+        const row = document.createElement("div");
+        row.className = "player-row" + (selectedInspectTarget === p.id ? " chosen" : "");
+        row.innerHTML = `<div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
+        row.addEventListener("click", () => {
+          selectedInspectTarget = p.id;
+          send({ type: "inspect", target_id: p.id });
+        });
+        el.appendChild(row);
+      });
+    }
+  }
+
+  // --- sabotage (traitor only) ---
+  const sabotageSection = $("sabotageSection");
+  if (me.isTraitor) {
+    sabotageSection.classList.remove("hidden");
+    if (!state.sabotage_available) {
+      $("sabotageList").innerHTML = "";
+      $("sabotageNotice").classList.remove("hidden");
+      $("sabotageNotice").textContent = sabotageNoticeText || "Sabotage used for this round.";
+    } else {
+      $("sabotageNotice").classList.add("hidden");
+      const targets = state.players.filter((p) => p.id !== me.playerId && p.alive && !p.is_host);
+      const el = $("sabotageList");
+      el.innerHTML = "";
+      targets.forEach((p) => {
+        const row = document.createElement("div");
+        row.className = "player-row";
+        row.innerHTML = `<div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
+        row.addEventListener("click", () => {
+          send({ type: "sabotage", target_id: p.id });
+        });
+        el.appendChild(row);
+      });
+    }
+  } else {
+    sabotageSection.classList.add("hidden");
+  }
+
+  renderClueLogInto("clueLog");
+}
+
+function renderClueLogInto(containerId) {
+  const el = $(containerId);
+  el.innerHTML = "";
+  clueLogEntries.forEach((entry) => {
+    const div = document.createElement("div");
+    div.className = "clue-entry";
+    div.innerHTML = `<span class="clue-target">${escapeHtml(entry.targetName)}</span> — ${escapeHtml(entry.clue)}`;
+    el.appendChild(div);
+  });
+}
+
+function renderEvidenceBoard() {
+  const board = $("evidenceBoard");
+  if (!state.evidence_board) {
+    board.classList.add("hidden");
+    return;
+  }
+  board.classList.remove("hidden");
+  $("evidenceCrimeLocation").textContent = `The body was found in ${state.evidence_board.crime_location}.`;
+  const el = $("evidenceAlibiList");
+  el.innerHTML = "";
+  state.evidence_board.alibis.forEach((a) => {
+    const row = document.createElement("div");
+    row.className = "alibi-row";
+    row.innerHTML = `<span class="alibi-name">${escapeHtml(a.name)}${a.id === me.playerId ? " (you)" : ""}</span><span class="alibi-location">${escapeHtml(a.location)}</span>`;
+    el.appendChild(row);
+  });
+}
+
+function renderMyClueNotes() {
+  const wrap = $("myClueNotes");
+  if (clueLogEntries.length === 0) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+  renderClueLogInto("myClueList");
 }
 
 function renderVotingList(players) {
@@ -485,6 +672,7 @@ function renderFinalLog(log) {
 // ---- action buttons --------------------------------------------------
 $("btnStartGame").addEventListener("click", () => send({ type: "start_game" }));
 $("btnReveal").addEventListener("click", () => send({ type: "reveal_kill" }));
+$("btnStartDiscussionHost").addEventListener("click", () => send({ type: "start_discussion" }));
 $("btnStartVoting").addEventListener("click", () => send({ type: "start_voting" }));
 $("btnChatSend").addEventListener("click", sendChat);
 $("chatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });

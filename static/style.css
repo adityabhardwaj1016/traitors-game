@@ -528,6 +528,73 @@ body.shake { animation: screen-shake 0.4s ease; }
   cursor: not-allowed;
 }
 
+/* ---- Investigation System: location chips, evidence board, clue log ---- */
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 18px;
+}
+.chip {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.chip:hover { border-color: var(--gold); }
+.chip.selected {
+  border-color: var(--gold);
+  background: rgba(199,162,74,0.14);
+  color: var(--gold-bright);
+  font-weight: 600;
+}
+.chip:disabled, .chip.disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.evidence-board {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 16px 8px;
+  margin: 4px 0 20px;
+}
+.crime-location-text {
+  font-family: var(--font-display);
+  color: var(--red-bright);
+  font-size: 17px;
+  margin: 0 0 16px;
+}
+.alibi-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.alibi-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.02);
+  font-size: 13.5px;
+}
+.alibi-row .alibi-name { font-weight: 600; }
+.alibi-row .alibi-location { color: var(--muted); }
+
+.clue-log { display: flex; flex-direction: column; gap: 8px; margin: 10px 0 20px; }
+.clue-entry {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.clue-entry .clue-target { font-weight: 700; color: var(--gold-bright); }
+
 /* winner celebration accents */
 #screen-gameover .center-panel { position: relative; }
 #gameOverTitle.accent-gold { text-shadow: 0 0 24px rgba(199,162,74,0.45); }

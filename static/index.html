@@ -98,12 +98,19 @@
     </div>
   </section>
 
-  <!-- ===== NIGHT (traitor picks victim) ===== -->
+  <!-- ===== NIGHT (traitor picks victim + crime location) ===== -->
   <section id="screen-night-traitor" class="screen hidden">
     <div class="panel">
       <h2 class="section-title accent-red">Night Falls</h2>
-      <p class="muted">🗡 You are the Traitor. Choose who to eliminate tonight.</p>
+      <p class="muted">🗡 You are the Traitor. Choose your victim and where the deed will happen.</p>
+
+      <div class="field-label">Target</div>
       <div id="killList" class="player-list selectable"></div>
+
+      <div class="field-label">Crime location</div>
+      <div id="killLocationList" class="chip-row"></div>
+
+      <button id="btnConfirmKill" class="btn btn-primary" disabled>Strike</button>
     </div>
   </section>
 
@@ -124,11 +131,61 @@
     </div>
   </section>
 
+  <!-- ===== INVESTIGATION (alive players) ===== -->
+  <section id="screen-investigation" class="screen hidden">
+    <div class="panel">
+      <h2 class="section-title accent-gold">🔎 Investigation</h2>
+      <p class="muted">Last night you were really in <strong id="myTrueLocation">—</strong>. Decide what you'll tell the others.</p>
+
+      <div class="field-label">Your public alibi</div>
+      <div id="alibiChips" class="chip-row"></div>
+      <p id="alibiLockedNotice" class="muted small hidden">Alibi locked in. Waiting on the others…</p>
+
+      <div id="inspectSection">
+        <div class="field-label">Investigate a player <span class="muted small">(one use)</span></div>
+        <div id="inspectList" class="player-list selectable"></div>
+      </div>
+
+      <div id="sabotageSection" class="hidden">
+        <div class="field-label">🗡 Sabotage <span class="muted small">(protect someone from inspection — one use)</span></div>
+        <div id="sabotageList" class="player-list selectable"></div>
+        <p id="sabotageNotice" class="muted small hidden"></p>
+      </div>
+
+      <div id="clueLog" class="clue-log"></div>
+
+      <p id="investigationHostHint" class="muted small">Waiting for the host to reveal the Evidence Board…</p>
+    </div>
+  </section>
+
+  <!-- ===== INVESTIGATION (host, moderating) ===== -->
+  <section id="screen-investigation-host" class="screen hidden">
+    <div class="panel">
+      <h2 class="section-title accent-gold">🔎 Investigation Underway</h2>
+      <p class="muted">Everyone is quietly recalling where they really were, deciding their story, and looking into each other.</p>
+      <p class="muted small"><span id="invAlibiCount">0</span>/<span id="invAliveCount">0</span> alibis submitted · <span id="invInspectCount">0</span> investigations used</p>
+      <button id="btnStartDiscussionHost" class="btn btn-primary">Reveal Evidence Board</button>
+    </div>
+  </section>
+
   <!-- ===== DISCUSSION ===== -->
   <section id="screen-discussion" class="screen hidden">
     <div class="panel">
       <h2 class="section-title">Discussion</h2>
       <p id="discussionVictim" class="muted"></p>
+
+      <div id="evidenceBoard" class="evidence-board hidden">
+        <div class="field-label">🩸 Crime Scene</div>
+        <p class="crime-location-text" id="evidenceCrimeLocation">—</p>
+        <div class="field-label">📜 Public Alibis</div>
+        <div id="evidenceAlibiList" class="alibi-list"></div>
+      </div>
+
+      <div id="myClueNotes" class="hidden">
+        <div class="field-label">🕵 Your Investigation Notes</div>
+        <div id="myClueList" class="clue-log"></div>
+      </div>
+
       <div id="discussionPlayers" class="player-list"></div>
       <button id="btnStartVoting" class="btn btn-primary hidden">Move to Voting</button>
       <p id="discussionHint" class="muted small hidden">Waiting for the host to open voting…</p>

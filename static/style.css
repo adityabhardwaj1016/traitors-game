@@ -595,6 +595,33 @@ body.shake { animation: screen-shake 0.4s ease; }
 }
 .clue-entry .clue-target { font-weight: 700; color: var(--gold-bright); }
 
+/* ---- scoreboard (Game Over screen) ---- */
+.scoreboard-wrap {
+  text-align: left;
+  margin: 22px 0 4px;
+  border-top: 1px solid var(--border);
+  padding-top: 18px;
+}
+.scoreboard { display: flex; flex-direction: column; gap: 6px; }
+.scoreboard-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 9px 12px;
+}
+.scoreboard-rank {
+  font-family: var(--font-display);
+  color: var(--gold);
+  font-size: 13px;
+  width: 20px;
+  flex-shrink: 0;
+}
+.scoreboard-name { flex: 1; font-weight: 600; font-size: 13.5px; }
+.scoreboard-stats { color: var(--muted); font-size: 12px; text-align: right; }
+
 /* winner celebration accents */
 #screen-gameover .center-panel { position: relative; }
 #gameOverTitle.accent-gold { text-shadow: 0 0 24px rgba(199,162,74,0.45); }

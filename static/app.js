@@ -319,7 +319,20 @@ function render() {
   // every state broadcast (which can arrive many times within one phase).
   if (state.phase !== lastPhase) {
     const enteringGameOver = state.phase === "GAME_OVER";
+    const enteringLobby = state.phase === "LOBBY" && lastPhase !== null;
     lastPhase = state.phase;
+    if (enteringLobby) {
+      // A rematch just reset the room — clear anything left over from last game.
+      me.isTraitor = null;
+      me.locations = [];
+      selectedKillTarget = null;
+      selectedKillLocation = null;
+      selectedAlibi = null;
+      selectedInspectTarget = null;
+      clueLogEntries = [];
+      sabotageNoticeText = "";
+      saveSession();
+    }
     if (window.TraitorsAudio) {
       TraitorsAudio.setPhase(state.phase);
       if (enteringGameOver) {
@@ -439,7 +452,14 @@ function render() {
           ? "The Traitor outlasted the group and struck from within."
           : "The group rooted out the Traitor before it was too late.";
       renderFinalLog(state.log);
-      clearSession();
+      renderScoreboard(state.scoreboard);
+      if (me.isCreator) {
+        $("btnPlayAgain").classList.remove("hidden");
+        $("playAgainHint").classList.add("hidden");
+      } else {
+        $("btnPlayAgain").classList.add("hidden");
+        $("playAgainHint").classList.remove("hidden");
+      }
       break;
   }
 }
@@ -669,11 +689,34 @@ function renderFinalLog(log) {
   });
 }
 
+function renderScoreboard(scoreboard) {
+  const wrap = $("scoreboardWrap");
+  if (!scoreboard || scoreboard.length === 0) {
+    wrap.classList.add("hidden");
+    return;
+  }
+  wrap.classList.remove("hidden");
+  const el = $("scoreboard");
+  el.innerHTML = "";
+  scoreboard.forEach((entry, i) => {
+    const row = document.createElement("div");
+    row.className = "scoreboard-row";
+    const traitorBit = entry.times_traitor > 0 ? ` · 🗡 ${entry.traitor_wins}/${entry.times_traitor} as Traitor` : "";
+    row.innerHTML = `
+      <span class="scoreboard-rank">#${i + 1}</span>
+      <span class="scoreboard-name">${escapeHtml(entry.name)}</span>
+      <span class="scoreboard-stats">${entry.wins}/${entry.games_played} wins${traitorBit}</span>
+    `;
+    el.appendChild(row);
+  });
+}
+
 // ---- action buttons --------------------------------------------------
 $("btnStartGame").addEventListener("click", () => send({ type: "start_game" }));
 $("btnReveal").addEventListener("click", () => send({ type: "reveal_kill" }));
 $("btnStartDiscussionHost").addEventListener("click", () => send({ type: "start_discussion" }));
 $("btnStartVoting").addEventListener("click", () => send({ type: "start_voting" }));
+$("btnPlayAgain").addEventListener("click", () => send({ type: "play_again" }));
 $("btnChatSend").addEventListener("click", sendChat);
 $("chatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });
 

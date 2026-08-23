@@ -107,6 +107,9 @@ class Room:
         self.winner: Optional[str] = None
         self.log: list[str] = []
 
+        # ---- Scoreboard: persists across "Play Again" rematches in this room ----
+        self.scoreboard: dict[str, dict] = {}  # pid -> {name, games_played, wins, times_traitor, traitor_wins, times_hosted}
+
         # ---- Investigation System (reset each round) ----
         self.crime_location: Optional[str] = None
         self.true_activities: dict[str, str] = {}   # pid -> real secret location that round
@@ -132,6 +135,41 @@ class Room:
         self.sabotage_target = None
         self.sabotage_available = True
         self.evidence_board = None
+
+    def scoreboard_entry(self, pid: str) -> dict:
+        return self.scoreboard.setdefault(pid, {
+            "name": self.players[pid].name,
+            "games_played": 0,
+            "wins": 0,
+            "times_traitor": 0,
+            "traitor_wins": 0,
+            "times_hosted": 0,
+        })
+
+    def record_game_result(self):
+        """Called once, right when self.winner is set. Every player except
+        that round's host gets credit for a game played; the Traitor and
+        the innocents split the win depending on who came out on top."""
+        for pid, p in self.players.items():
+            if pid == self.host_id:
+                continue
+            entry = self.scoreboard_entry(pid)
+            entry["name"] = p.name  # keep display name current
+            entry["games_played"] += 1
+            is_traitor = pid == self.traitor_id
+            if is_traitor:
+                entry["times_traitor"] += 1
+            won = (self.winner == "traitor" and is_traitor) or (self.winner == "players" and not is_traitor)
+            if won:
+                entry["wins"] += 1
+                if is_traitor:
+                    entry["traitor_wins"] += 1
+
+    def scoreboard_list(self):
+        return sorted(
+            self.scoreboard.values(),
+            key=lambda e: (-e["wins"], -e["games_played"], e["name"].lower()),
+        )
 
     async def broadcast(self, message: dict, exclude: Optional[str] = None):
         for pid, ws in list(self.connections.items()):
@@ -175,6 +213,8 @@ class Room:
             "investigations_used": sum(1 for v in self.has_inspected.values() if v),
             "sabotage_available": self.sabotage_available,
             "evidence_board": self.evidence_board,
+            # Scoreboard (persists across rematches in this room)
+            "scoreboard": self.scoreboard_list(),
             # Investigation System — personalized to the viewer
             "my_true_location": self.true_activities.get(viewer_id) if viewer_id else None,
             "my_alibi_submitted": bool(viewer_id and viewer_id in self.alibi_claims),
@@ -351,6 +391,7 @@ async def tally_votes(room: Room):
         room.phase = "GAME_OVER"
         room.winner = winner
         room.add_log(f"Game over — {'the Traitor wins!' if winner == 'traitor' else 'the Players win!'}")
+        room.record_game_result()
     else:
         room.phase = "NIGHT"
         room.victim_id = None
@@ -406,6 +447,7 @@ async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str):
                 host_player = room.players[host_id]
                 room.phase = "SELECT_TRAITOR"
                 room.add_log(f"{host_player.name} was drawn to host this game.")
+                room.scoreboard_entry(host_id)["times_hosted"] += 1
 
                 await room.broadcast({
                     "type": "host_announcement",
@@ -470,6 +512,7 @@ async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str):
                         room.phase = "GAME_OVER"
                         room.winner = winner
                         room.add_log(f"Game over — {'the Traitor wins!' if winner == 'traitor' else 'the Players win!'}")
+                        room.record_game_result()
                         await room.broadcast_state()
                     else:
                         await begin_investigation(room)
@@ -572,6 +615,24 @@ async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str):
             # ---- HOST: force-tally votes early ----
             elif mtype == "force_tally" and is_current_host and room.phase == "VOTING":
                 await tally_votes(room)
+
+            # ---- CREATOR: rematch — reset the room to LOBBY, keeping everyone
+            # and the scoreboard, ready for a fresh random host + traitor draw ----
+            elif mtype == "play_again" and is_creator and room.phase == "GAME_OVER":
+                for p in room.players.values():
+                    p.alive = True
+                    p.is_host = False
+                room.phase = "LOBBY"
+                room.host_id = None
+                room.traitor_id = None
+                room.victim_id = None
+                room.votes = {}
+                room.round_num = 1
+                room.winner = None
+                room.log = []
+                room.reset_round_investigation_state()
+                room.add_log("A new game begins.")
+                await room.broadcast_state()
 
             # ---- Simple chat, broadcast to room ----
             elif mtype == "chat":

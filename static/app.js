@@ -59,7 +59,7 @@ let ws = null;
 let me = { roomCode: null, playerId: null, name: null, isCreator: false, isTraitor: null, locations: [], character: null };
 let state = null; // last "state" message from server
 let hasVoted = false;
-let pendingHostReveal = null; // { id, name } while the host-draw animation is showing
+let pendingRoleReveal = false; // true while the roles-assigned animation is showing
 let lastPhase = null; // used to fire phase-transition side effects (music, stings) only once
 
 // ---- Night kill selection (Traitor) ----
@@ -86,9 +86,27 @@ function clearSession() {
   localStorage.removeItem("traitors_session");
 }
 
-// ---- who is the host right now? (drawn at random once the game starts) --
-function isMeHost() {
-  return !!(state && state.host_id && state.host_id === me.playerId);
+// ---- is a phase timer active? --------------------------------------------
+let timerInterval = null;
+function updateTimerBadge() {
+  const badge = $("timerBadge");
+  if (!state || !state.phase_ends_at) {
+    badge.classList.add("hidden");
+    if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+    return;
+  }
+  badge.classList.remove("hidden");
+  const tick = () => {
+    const msLeft = Math.max(0, state.phase_ends_at - Date.now());
+    const secLeft = Math.ceil(msLeft / 1000);
+    const m = Math.floor(secLeft / 60);
+    const s = secLeft % 60;
+    $("timerText").textContent = `${m}:${s.toString().padStart(2, "0")}`;
+    badge.classList.toggle("urgent", secLeft <= 10);
+  };
+  tick();
+  if (timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(tick, 500);
 }
 
 function findPlayerById(id) {
@@ -220,31 +238,23 @@ function handleMessage(msg) {
     case "state":
       state = msg;
       hasVoted = false; // reset on any fresh state broadcast that isn't mid-vote counting UI
-      updateHostBadge();
       updateSpectatorBadge();
-      if (pendingHostReveal) {
+      updateTimerBadge();
+      if (pendingRoleReveal) {
         // Let the reveal animation play out before switching to the next screen.
-        setTimeout(() => { pendingHostReveal = null; render(); }, 2400);
+        setTimeout(() => { pendingRoleReveal = false; render(); }, 2400);
       } else {
         render();
       }
       break;
-    case "host_announcement":
-      pendingHostReveal = { id: msg.host_id, name: msg.host_name };
-      $("hostAnnounceName").textContent = msg.host_name;
-      showScreen("screen-host-announce");
-      break;
-    case "choose_traitor_prompt":
-      renderSelectList(msg.players);
+    case "roles_assigned":
+      pendingRoleReveal = true;
+      showScreen("screen-roles-assigned");
       break;
     case "you_are_traitor":
       me.isTraitor = msg.is_traitor;
       if (msg.locations) me.locations = msg.locations;
       saveSession();
-      break;
-    case "host_kill_notice":
-      $("hostVictimName").textContent = msg.victim_name;
-      showScreen("screen-host-reveal");
       break;
     case "night_reveal":
       playKillOverlay({ id: msg.victim_id, name: msg.victim_name, isMe: msg.victim_id === me.playerId, cause: "night" });
@@ -287,21 +297,11 @@ function handleMessage(msg) {
   }
 }
 
-function updateHostBadge() {
-  const badge = $("hostBadge");
-  if (state && state.host_name && state.phase !== "LOBBY") {
-    $("hostBadgeName").textContent = state.host_name + (isMeHost() ? " (you)" : "");
-    badge.classList.remove("hidden");
-  } else {
-    badge.classList.add("hidden");
-  }
-}
-
 // ---- spectator status: eliminated players stay in the game, just can't act ----
 function amSpectating() {
   if (!state) return false;
   const myPlayer = state.players.find((p) => p.id === me.playerId);
-  return !!(myPlayer && !myPlayer.is_host && !myPlayer.alive);
+  return !!(myPlayer && !myPlayer.alive);
 }
 
 function updateSpectatorBadge() {
@@ -452,6 +452,31 @@ function showScreen(id) {
   $(id).classList.remove("hidden");
 }
 
+// ---------------------------------------------------------------------------
+// Palace visual system — cross-fades the SVG backdrop behind the game
+// panels to match the current phase. See index.html for the scene markup
+// and style.css for the crossfade transition.
+// ---------------------------------------------------------------------------
+const PHASE_TO_SCENE = {
+  LOBBY: "hall",
+  SELECT_TRAITOR: "chamber",
+  NIGHT: "corridor",
+  REVEAL: "corridor",
+  INVESTIGATION: "study",
+  DISCUSSION: "gallery",
+  VOTING: "judgment",
+  // GAME_OVER is resolved dynamically below (triumph vs ruin)
+};
+
+function updatePalaceScene(phase, winner) {
+  const target = phase === "GAME_OVER"
+    ? (winner === "traitor" ? "ruin" : "triumph")
+    : (PHASE_TO_SCENE[phase] || "hall");
+  document.querySelectorAll(".palace-backdrop .scene").forEach((el) => {
+    el.classList.toggle("active", el.dataset.scene === target);
+  });
+}
+
 function render() {
   if (!state) return;
 
@@ -473,6 +498,7 @@ function render() {
       sabotageNoticeText = "";
       saveSession();
     }
+    updatePalaceScene(state.phase, state.winner);
     if (window.TraitorsAudio) {
       TraitorsAudio.setPhase(state.phase);
       if (enteringGameOver) {
@@ -484,7 +510,6 @@ function render() {
 
   const myPlayer = state.players.find((p) => p.id === me.playerId);
   const amAlive = myPlayer ? myPlayer.alive : true;
-  const amHost = isMeHost();
 
   switch (state.phase) {
     case "LOBBY":
@@ -500,48 +525,26 @@ function render() {
       }
       break;
 
-    case "SELECT_TRAITOR":
-      if (amHost) {
-        showScreen("screen-select");
-        renderSelectList(state.players.filter((p) => !p.is_host));
-      } else {
-        showScreen("screen-waiting");
-        $("waitingText").textContent = `${state.host_name || "The host"} is choosing the Traitor…`;
-      }
-      break;
-
     case "NIGHT":
       if (me.isTraitor) {
         showScreen("screen-night-traitor");
-        renderKillList(state.players.filter((p) => p.id !== me.playerId && p.alive && !p.is_host));
+        renderKillList(state.players.filter((p) => p.id !== me.playerId && p.alive));
         renderKillLocationChips();
         updateKillConfirmButton();
-      } else if (amHost) {
-        showScreen("screen-waiting");
-        $("waitingText").textContent = "Waiting for the Traitor to strike…";
       } else {
         showScreen("screen-night-wait");
       }
       break;
 
     case "REVEAL":
-      if (amHost) {
-        // screen already shown via host_kill_notice
-      } else {
-        showScreen("screen-night-wait");
-      }
+      showScreen("screen-night-wait");
       break;
 
     case "INVESTIGATION":
-      if (amHost) {
-        showScreen("screen-investigation-host");
-        $("invAlibiCount").textContent = state.alibi_submitted_ids.length;
-        $("invAliveCount").textContent = state.alive_count;
-        $("invInspectCount").textContent = state.investigations_used;
-      } else {
-        showScreen("screen-investigation");
-        renderInvestigationScreen(amAlive);
-      }
+      showScreen("screen-investigation");
+      $("invAlibiCount").textContent = state.alibi_submitted_ids.length;
+      $("invAliveCount").textContent = state.alive_count;
+      renderInvestigationScreen(amAlive);
       break;
 
     case "DISCUSSION":
@@ -552,13 +555,7 @@ function render() {
       renderEvidenceBoard();
       renderMyClueNotes();
       renderPlayerList("discussionPlayers", state.players, true);
-      if (amHost) {
-        $("btnStartVoting").classList.remove("hidden");
-        $("discussionHint").classList.add("hidden");
-      } else {
-        $("btnStartVoting").classList.add("hidden");
-        $("discussionHint").classList.remove("hidden");
-      }
+      renderDiscussionReadyControls(amAlive);
       break;
 
     case "VOTING":
@@ -568,18 +565,16 @@ function render() {
       $("voteProgressBar").style.width = state.alive_count
         ? Math.min(100, (state.votes_in / state.alive_count) * 100) + "%"
         : "0%";
-      if (amHost || !amAlive) {
+      if (!amAlive) {
         $("votingList").innerHTML = "";
         $("votedNotice").classList.remove("hidden");
-        $("votedNotice").textContent = amHost
-          ? "You are moderating — watch the votes come in."
-          : "You have been eliminated and can no longer vote.";
+        $("votedNotice").textContent = "You have been eliminated and can no longer vote.";
       } else if (hasVoted) {
         $("votedNotice").classList.remove("hidden");
         $("votingList").innerHTML = "";
       } else {
         $("votedNotice").classList.add("hidden");
-        renderVotingList(state.players.filter((p) => p.alive && !p.is_host && p.id !== me.playerId));
+        renderVotingList(state.players.filter((p) => p.alive && p.id !== me.playerId));
       }
       break;
 
@@ -628,27 +623,11 @@ function renderPlayerList(containerId, players, showDeadTag) {
     row.innerHTML = `
       <div class="seal" ${sealFor(p)}>${sealContent(p)}</div>
       <div class="player-name">${escapeHtml(p.name)}${p.id === me.playerId ? " (you)" : ""}</div>
-      ${p.is_host ? '<span class="player-tag host-tag">HOST</span>' : ""}
       ${!p.alive && showDeadTag ? '<span class="player-tag">ELIMINATED</span>' : ""}
       ${!p.connected ? '<span class="player-tag">OFFLINE</span>' : ""}
     `;
     el.appendChild(row);
   });
-}
-
-function renderSelectList(players) {
-  const el = $("selectList");
-  el.innerHTML = "";
-  players.forEach((p) => {
-    const row = document.createElement("div");
-    row.className = "player-row";
-    row.innerHTML = `<div class="seal" ${sealFor(p)}>${sealContent(p)}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
-    row.addEventListener("click", () => {
-      send({ type: "select_traitor", target_id: p.id });
-    });
-    el.appendChild(row);
-  });
-  showScreen("screen-select");
 }
 
 function renderKillList(players) {
@@ -725,7 +704,7 @@ function renderInvestigationScreen(amAlive) {
     if (hasInspected) {
       $("inspectList").innerHTML = '<p class="muted small">Investigation used for this round.</p>';
     } else {
-      const targets = state.players.filter((p) => p.id !== me.playerId && p.alive && !p.is_host);
+      const targets = state.players.filter((p) => p.id !== me.playerId && p.alive);
       const el = $("inspectList");
       el.innerHTML = "";
       targets.forEach((p) => {
@@ -751,7 +730,7 @@ function renderInvestigationScreen(amAlive) {
       $("sabotageNotice").textContent = sabotageNoticeText || "Sabotage used for this round.";
     } else {
       $("sabotageNotice").classList.add("hidden");
-      const targets = state.players.filter((p) => p.id !== me.playerId && p.alive && !p.is_host);
+      const targets = state.players.filter((p) => p.id !== me.playerId && p.alive);
       const el = $("sabotageList");
       el.innerHTML = "";
       targets.forEach((p) => {
@@ -810,6 +789,22 @@ function renderMyClueNotes() {
   renderClueLogInto("myClueList");
 }
 
+function renderDiscussionReadyControls(amAlive) {
+  const readyIds = (state && state.discussion_ready_ids) || [];
+  const btn = $("btnEndDiscussion");
+  const status = $("discussionReadyStatus");
+  status.textContent = `${readyIds.length}/${state.alive_count} ready to move on`;
+
+  if (!amAlive) {
+    btn.classList.add("hidden");
+    return;
+  }
+  btn.classList.remove("hidden");
+  const iAmReady = readyIds.includes(me.playerId);
+  btn.disabled = iAmReady;
+  btn.textContent = iAmReady ? "Waiting for others…" : "Ready to Move On";
+}
+
 function renderVotingList(players) {
   const el = $("votingList");
   el.innerHTML = "";
@@ -861,9 +856,7 @@ function renderScoreboard(scoreboard) {
 
 // ---- action buttons --------------------------------------------------
 $("btnStartGame").addEventListener("click", () => send({ type: "start_game" }));
-$("btnReveal").addEventListener("click", () => send({ type: "reveal_kill" }));
-$("btnStartDiscussionHost").addEventListener("click", () => send({ type: "start_discussion" }));
-$("btnStartVoting").addEventListener("click", () => send({ type: "start_voting" }));
+$("btnEndDiscussion").addEventListener("click", () => send({ type: "end_discussion_ready" }));
 $("btnPlayAgain").addEventListener("click", () => send({ type: "play_again" }));
 $("btnChatSend").addEventListener("click", sendChat);
 $("chatInput").addEventListener("keydown", (e) => { if (e.key === "Enter") sendChat(); });

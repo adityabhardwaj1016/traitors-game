@@ -10,6 +10,250 @@
 </head>
 <body>
 
+<div id="palaceBackdrop" class="palace-backdrop">
+
+  <!-- THE GREAT HALL — lobby / gathering -->
+  <div class="scene scene-hall active" data-scene="hall">
+    <svg viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="hallBg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#12141c"/>
+          <stop offset="60%" stop-color="#0b0d12"/>
+          <stop offset="100%" stop-color="#160c0f"/>
+        </linearGradient>
+        <radialGradient id="hallMoon" cx="50%" cy="30%" r="60%">
+          <stop offset="0%" stop-color="#4a3c2a" stop-opacity="0.55"/>
+          <stop offset="100%" stop-color="#0b0d12" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="800" height="450" fill="url(#hallBg)"/>
+      <g opacity="0.5">
+        <path d="M120,260 L120,120 A40,40 0 0 1 200,120 L200,260 Z" fill="url(#hallMoon)"/>
+        <path d="M360,240 L360,90 A50,50 0 0 1 460,90 L460,240 Z" fill="url(#hallMoon)"/>
+        <path d="M620,260 L620,120 A40,40 0 0 1 700,120 L700,260 Z" fill="url(#hallMoon)"/>
+      </g>
+      <g stroke="#C7A24A" stroke-width="1.5" opacity="0.25" fill="none">
+        <path d="M120,260 L120,120 A40,40 0 0 1 200,120 L200,260"/>
+        <path d="M360,240 L360,90 A50,50 0 0 1 460,90 L460,240"/>
+        <path d="M620,260 L620,120 A40,40 0 0 1 700,120 L700,260"/>
+      </g>
+      <polygon points="150,420 650,420 560,380 240,380" fill="#0e0a0c" opacity="0.85"/>
+      <g fill="#E0C572" opacity="0.6">
+        <circle cx="280" cy="382" r="2.5"/>
+        <circle cx="360" cy="380" r="2.5"/>
+        <circle cx="440" cy="380" r="2.5"/>
+        <circle cx="520" cy="382" r="2.5"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- THE CANDLELIT CHAMBER — host drawn / traitor chosen in secret -->
+  <div class="scene scene-chamber" data-scene="chamber">
+    <svg viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="chamberGlow" cx="50%" cy="55%" r="55%">
+          <stop offset="0%" stop-color="#3a2410" stop-opacity="0.55"/>
+          <stop offset="100%" stop-color="#0b0d12" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="800" height="450" fill="#0b0d12"/>
+      <rect width="800" height="450" fill="url(#chamberGlow)"/>
+      <g transform="translate(400,225)" opacity="0.18" stroke="#C7A24A" stroke-width="2" fill="none">
+        <circle r="90"/>
+        <circle r="70"/>
+        <path d="M0,-60 L0,60 M-60,0 L60,0"/>
+      </g>
+      <g fill="#2a1c10">
+        <rect x="140" y="260" width="10" height="90" rx="2"/>
+        <rect x="650" y="260" width="10" height="90" rx="2"/>
+      </g>
+      <g fill="#E0C572">
+        <ellipse cx="145" cy="255" rx="4" ry="9"/>
+        <ellipse cx="655" cy="255" rx="4" ry="9"/>
+      </g>
+      <g fill="#E0C572" opacity="0.3">
+        <circle cx="145" cy="250" r="16"/>
+        <circle cx="655" cy="250" r="16"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- THE CORRIDOR — night, the traitor stalks -->
+  <div class="scene scene-corridor" data-scene="corridor">
+    <svg viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="corrBg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0a0b10"/>
+          <stop offset="100%" stop-color="#050508"/>
+        </linearGradient>
+        <radialGradient id="corrMoon" cx="50%" cy="35%" r="35%">
+          <stop offset="0%" stop-color="#8a95b0" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#0a0b10" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="800" height="450" fill="url(#corrBg)"/>
+      <polygon points="0,450 260,180 540,180 800,450" fill="#12131a" opacity="0.6"/>
+      <polygon points="0,0 260,180 540,180 800,0" fill="#0d0e14" opacity="0.6"/>
+      <ellipse cx="400" cy="150" rx="60" ry="90" fill="url(#corrMoon)"/>
+      <rect x="370" y="90" width="60" height="120" rx="6" fill="none" stroke="#8a95b0" stroke-opacity="0.3"/>
+      <g transform="translate(150,300)" fill="#05050a" opacity="0.85">
+        <ellipse cx="0" cy="-40" rx="18" ry="22"/>
+        <path d="M -25,110 Q -30,20 0,-20 Q 30,20 25,110 Z"/>
+      </g>
+      <g fill="#E14B3F" opacity="0.5">
+        <circle cx="80" cy="240" r="3"/>
+        <circle cx="720" cy="240" r="3"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- THE STUDY — investigation -->
+  <div class="scene scene-study" data-scene="study">
+    <svg viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="studyLamp" cx="50%" cy="70%" r="40%">
+          <stop offset="0%" stop-color="#5a3d18" stop-opacity="0.5"/>
+          <stop offset="100%" stop-color="#0b0d12" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="800" height="450" fill="#0b0d12"/>
+      <g opacity="0.5">
+        <rect x="20" y="60" width="18" height="70" fill="#241c14"/>
+        <rect x="42" y="80" width="18" height="50" fill="#2a2014"/>
+        <rect x="64" y="50" width="18" height="80" fill="#241c14"/>
+        <rect x="86" y="90" width="18" height="40" fill="#2a2014"/>
+        <rect x="20" y="150" width="18" height="70" fill="#2a2014"/>
+        <rect x="42" y="140" width="18" height="80" fill="#241c14"/>
+        <rect x="64" y="160" width="18" height="60" fill="#2a2014"/>
+        <rect x="86" y="150" width="18" height="70" fill="#241c14"/>
+      </g>
+      <g opacity="0.5">
+        <rect x="694" y="60" width="18" height="70" fill="#241c14"/>
+        <rect x="716" y="80" width="18" height="50" fill="#2a2014"/>
+        <rect x="738" y="50" width="18" height="80" fill="#241c14"/>
+        <rect x="760" y="90" width="18" height="40" fill="#2a2014"/>
+        <rect x="694" y="150" width="18" height="70" fill="#2a2014"/>
+        <rect x="716" y="140" width="18" height="80" fill="#241c14"/>
+        <rect x="738" y="160" width="18" height="60" fill="#2a2014"/>
+        <rect x="760" y="150" width="18" height="70" fill="#241c14"/>
+      </g>
+      <rect width="800" height="450" fill="url(#studyLamp)"/>
+      <polygon points="260,420 540,420 500,370 300,370" fill="#0e0a0c" opacity="0.85"/>
+      <g transform="translate(400,340)" stroke="#C7A24A" stroke-width="2" fill="none" opacity="0.4">
+        <circle cx="0" cy="0" r="18"/>
+        <line x1="13" y1="13" x2="30" y2="30"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- THE GALLERY — discussion, portraits watching the suspects -->
+  <div class="scene scene-gallery" data-scene="gallery">
+    <svg viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="galleryFloor" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#0b0d12"/>
+          <stop offset="100%" stop-color="#1a1210"/>
+        </linearGradient>
+      </defs>
+      <rect width="800" height="450" fill="url(#galleryFloor)"/>
+      <g transform="translate(90,70)">
+        <rect width="110" height="140" rx="6" fill="none" stroke="#C7A24A" stroke-opacity="0.35" stroke-width="3"/>
+        <circle cx="55" cy="55" r="22" fill="#1c1418" opacity="0.8"/>
+        <path d="M25,120 Q55,90 85,120 Z" fill="#1c1418" opacity="0.8"/>
+        <ellipse cx="55" cy="10" rx="30" ry="6" fill="#E0C572" opacity="0.15"/>
+      </g>
+      <g transform="translate(260,70)">
+        <rect width="110" height="140" rx="6" fill="none" stroke="#C7A24A" stroke-opacity="0.35" stroke-width="3"/>
+        <circle cx="55" cy="55" r="22" fill="#1c1418" opacity="0.8"/>
+        <path d="M25,120 Q55,90 85,120 Z" fill="#1c1418" opacity="0.8"/>
+        <ellipse cx="55" cy="10" rx="30" ry="6" fill="#E0C572" opacity="0.15"/>
+      </g>
+      <g transform="translate(430,70)">
+        <rect width="110" height="140" rx="6" fill="none" stroke="#C7A24A" stroke-opacity="0.35" stroke-width="3"/>
+        <circle cx="55" cy="55" r="22" fill="#1c1418" opacity="0.8"/>
+        <path d="M25,120 Q55,90 85,120 Z" fill="#1c1418" opacity="0.8"/>
+        <ellipse cx="55" cy="10" rx="30" ry="6" fill="#E0C572" opacity="0.15"/>
+      </g>
+      <g transform="translate(600,70)">
+        <rect width="110" height="140" rx="6" fill="none" stroke="#C7A24A" stroke-opacity="0.35" stroke-width="3"/>
+        <circle cx="55" cy="55" r="22" fill="#1c1418" opacity="0.8"/>
+        <path d="M25,120 Q55,90 85,120 Z" fill="#1c1418" opacity="0.8"/>
+        <ellipse cx="55" cy="10" rx="30" ry="6" fill="#E0C572" opacity="0.15"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- THE JUDGMENT HALL — voting -->
+  <div class="scene scene-judgment" data-scene="judgment">
+    <svg viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="judgBeam" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#E0C572" stop-opacity="0.28"/>
+          <stop offset="100%" stop-color="#E0C572" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <rect width="800" height="450" fill="#0b0d12"/>
+      <g fill="#12141c">
+        <rect x="60" y="0" width="30" height="450"/>
+        <rect x="220" y="0" width="24" height="450"/>
+        <rect x="556" y="0" width="24" height="450"/>
+        <rect x="710" y="0" width="30" height="450"/>
+      </g>
+      <polygon points="340,0 460,0 520,450 280,450" fill="url(#judgBeam)"/>
+      <g fill="#C7A24A" opacity="0.25">
+        <rect x="52" y="0" width="46" height="14"/>
+        <rect x="212" y="0" width="40" height="14"/>
+        <rect x="548" y="0" width="40" height="14"/>
+        <rect x="702" y="0" width="46" height="14"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- TRIUMPH — the players win -->
+  <div class="scene scene-triumph" data-scene="triumph">
+    <svg viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="triumphGlow" cx="50%" cy="45%" r="60%">
+          <stop offset="0%" stop-color="#E0C572" stop-opacity="0.35"/>
+          <stop offset="100%" stop-color="#0b0d12" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="800" height="450" fill="#0b0d12"/>
+      <rect width="800" height="450" fill="url(#triumphGlow)"/>
+      <g stroke="#E0C572" stroke-opacity="0.18" stroke-width="2">
+        <line x1="400" y1="225" x2="400" y2="20"/>
+        <line x1="400" y1="225" x2="560" y2="60"/>
+        <line x1="400" y1="225" x2="240" y2="60"/>
+        <line x1="400" y1="225" x2="640" y2="150"/>
+        <line x1="400" y1="225" x2="160" y2="150"/>
+        <line x1="400" y1="225" x2="620" y2="330"/>
+        <line x1="400" y1="225" x2="180" y2="330"/>
+      </g>
+    </svg>
+  </div>
+
+  <!-- RUIN — the traitor wins -->
+  <div class="scene scene-ruin" data-scene="ruin">
+    <svg viewBox="0 0 800 450" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="ruinGlow" cx="50%" cy="50%" r="60%">
+          <stop offset="0%" stop-color="#B3231B" stop-opacity="0.32"/>
+          <stop offset="100%" stop-color="#0b0d12" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <rect width="800" height="450" fill="#0b0d12"/>
+      <rect width="800" height="450" fill="url(#ruinGlow)"/>
+      <g stroke="#E14B3F" stroke-opacity="0.3" stroke-width="1.5" fill="none">
+        <path d="M400,225 L360,140 L390,90"/>
+        <path d="M400,225 L470,160 L520,180"/>
+        <path d="M400,225 L320,300 L260,320"/>
+        <path d="M400,225 L460,320 L510,360"/>
+      </g>
+    </svg>
+  </div>
+
+</div>
+
 <div class="grain"></div>
 <div class="embers" id="embers"></div>
 

@@ -765,3 +765,39 @@ body.shake { animation: screen-shake 0.4s ease; }
   .host-reveal-name { font-size: 24px; }
   .portrait-frame.large { width: 130px; height: 170px; }
 }
+
+/* ---------------------------------------------------------------------- */
+/* Palace visual system — hand-drawn SVG backdrops that cross-fade behind */
+/* the game panels depending on the current phase. Original gothic-manor */
+/* art (not the show's branding): the Great Hall, a candlelit chamber, a  */
+/* corridor at night, a study, a portrait gallery, a judgment hall, and   */
+/* triumph/ruin endings. Controlled from app.js via updatePalaceScene().  */
+/* ---------------------------------------------------------------------- */
+
+.palace-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  background: var(--bg);
+}
+.palace-backdrop .scene {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 1.3s ease;
+}
+.palace-backdrop .scene.active { opacity: 1; }
+.palace-backdrop svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+/* Soft vignette so panel text always stays legible regardless of scene */
+.palace-backdrop::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 40%, transparent 30%, rgba(11,13,18,0.55) 100%);
+  pointer-events: none;
+}

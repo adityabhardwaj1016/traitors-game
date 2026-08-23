@@ -34,6 +34,9 @@
       <h1 class="title">Trust no one.</h1>
       <p class="subtitle">A game of hidden allegiance. Gather your circle — one among you is not what they seem, and no one picks their role until everyone has arrived.</p>
 
+      <label class="field-label">Choose your look</label>
+      <div id="characterGrid" class="character-grid"></div>
+
       <div class="tabs">
         <button class="tab active" data-tab="create">Create Room</button>
         <button class="tab" data-tab="join">Join Room</button>
@@ -232,11 +235,11 @@
 
 </main>
 
-<!-- full-screen kill/elimination animation, triggered on night deaths and vote-outs -->
+<!-- full-screen kill/elimination animation: portrait tilts, falls, shatters, spooky glow -->
 <div id="killOverlay" class="kill-overlay hidden">
   <div class="kill-flash"></div>
   <div class="kill-content">
-    <div class="dagger">🗡</div>
+    <div id="killPortraitWrap" class="kill-portrait-wrap"></div>
     <div class="kill-text" id="killOverlayText">—</div>
     <div class="kill-subtext" id="killOverlaySubtext"></div>
   </div>

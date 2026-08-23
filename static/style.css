@@ -288,6 +288,7 @@ body {
 .btn:active { transform: scale(0.98); }
 .btn-primary { background: linear-gradient(135deg, var(--red-bright), var(--red)); color: #fff; box-shadow: 0 6px 18px rgba(179,35,27,0.25); }
 .btn-primary:hover { filter: brightness(1.12); }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; filter: none; }
 .btn-small { width: auto; margin-top: 0; padding: 10px 16px; background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
 
 .error-text { color: var(--red-bright); font-size: 13px; margin-top: 14px; text-align: center; }
@@ -342,11 +343,11 @@ body {
   border: 1px solid var(--border);
   display: flex; align-items: center; justify-content: center;
   font-family: var(--font-display);
-  font-size: 14px;
+  font-size: 15px;
   color: var(--gold);
   flex-shrink: 0;
 }
-.player-row.dead .seal { color: var(--red-bright); border-color: var(--red); }
+.player-row.dead .seal { color: var(--red-bright); border-color: var(--red); filter: grayscale(0.6); }
 
 .player-name { flex: 1; font-weight: 600; font-size: 14.5px; }
 .player-row.dead .player-name { color: var(--muted); text-decoration: line-through; }
@@ -451,74 +452,6 @@ body {
   to { opacity: 1; transform: translateX(-50%) translateY(0); }
 }
 
-/* ---- kill / elimination overlay ---- */
-.kill-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  pointer-events: none;
-}
-.kill-overlay.hidden { display: none; }
-
-.kill-flash {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 50% 45%, rgba(179,35,27,0.55), rgba(11,13,18,0.94) 70%);
-  animation: kill-flash-anim 2.3s ease forwards;
-}
-@keyframes kill-flash-anim {
-  0% { opacity: 0; }
-  10% { opacity: 1; }
-  75% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-.kill-content {
-  position: relative;
-  text-align: center;
-  animation: kill-content-anim 2.3s ease forwards;
-}
-@keyframes kill-content-anim {
-  0% { opacity: 0; transform: scale(0.85); }
-  12% { opacity: 1; transform: scale(1.08); }
-  22% { transform: scale(1); }
-  80% { opacity: 1; }
-  100% { opacity: 0; }
-}
-
-.dagger {
-  font-size: 64px;
-  filter: drop-shadow(0 0 20px rgba(225,75,63,0.8));
-  animation: dagger-strike 0.5s ease;
-}
-@keyframes dagger-strike {
-  0% { transform: translateY(-50px) rotate(-35deg); opacity: 0; }
-  60% { transform: translateY(6px) rotate(10deg); opacity: 1; }
-  100% { transform: translateY(0) rotate(0deg); opacity: 1; }
-}
-
-.kill-text {
-  font-family: var(--font-display);
-  font-size: 32px;
-  font-weight: 700;
-  color: var(--red-bright);
-  margin-top: 14px;
-  letter-spacing: 0.02em;
-}
-.kill-subtext { color: var(--muted); font-size: 14px; margin-top: 8px; }
-
-@keyframes screen-shake {
-  0%, 100% { transform: translate(0, 0); }
-  20% { transform: translate(-4px, 2px); }
-  40% { transform: translate(4px, -2px); }
-  60% { transform: translate(-3px, 1px); }
-  80% { transform: translate(3px, -1px); }
-}
-body.shake { animation: screen-shake 0.4s ease; }
-
 .chat-input-row .input:disabled {
   opacity: 0.5;
   cursor: not-allowed;
@@ -622,6 +555,205 @@ body.shake { animation: screen-shake 0.4s ease; }
 .scoreboard-name { flex: 1; font-weight: 600; font-size: 13.5px; }
 .scoreboard-stats { color: var(--muted); font-size: 12px; text-align: right; }
 
+/* ---------------------------------------------------------------------- */
+/* Character portraits — framed avatars, used for selection AND the       */
+/* elimination animation. Real art can drop in later: see app.js CHARACTERS */
+/* (each entry can point at /static/characters/<id>.jpg — if that image   */
+/* 404s, the gradient + icon placeholder below shows through instead).    */
+/* ---------------------------------------------------------------------- */
+
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(62px, 1fr));
+  gap: 8px;
+  margin: 10px 0 18px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 2px 2px 2px 0;
+}
+
+.portrait-frame {
+  position: relative;
+  border-radius: 8px;
+  background: linear-gradient(135deg, var(--seal-a, #2A2E3A), var(--seal-b, #191C24));
+  border: 2px solid rgba(199,162,74,0.3);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.4), 0 4px 10px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.portrait-frame .portrait-photo {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.portrait-frame.small {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  padding: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.portrait-frame.small:hover { border-color: var(--gold-bright); transform: translateY(-2px); }
+.portrait-frame.small.selected {
+  border-color: var(--gold-bright);
+  box-shadow: 0 0 0 2px rgba(199,162,74,0.4), 0 4px 14px rgba(199,162,74,0.3);
+}
+.portrait-frame .portrait-art { font-size: 22px; position: relative; z-index: 1; }
+.portrait-frame.small .portrait-name {
+  font-size: 9px;
+  color: var(--muted);
+  margin-top: 3px;
+  text-align: center;
+  letter-spacing: 0.01em;
+  position: relative;
+  z-index: 1;
+}
+.portrait-frame.small.selected .portrait-name { color: var(--gold-bright); }
+
+.portrait-frame.large {
+  width: 150px;
+  height: 195px;
+  margin: 0 auto 10px;
+  border-width: 3px;
+  transform-origin: 50% 15%;
+  will-change: transform, opacity;
+}
+.portrait-frame.large .portrait-art { font-size: 54px; }
+.portrait-frame.large .portrait-name {
+  font-family: var(--font-display);
+  font-size: 13px;
+  color: var(--gold-bright);
+  margin-top: 8px;
+  letter-spacing: 0.04em;
+  position: relative;
+  z-index: 1;
+}
+
+/* Step 2: frame tilts on the wall */
+.portrait-frame.large.tilt {
+  transition: transform 0.4s ease;
+  transform: rotate(-9deg) translateY(3px);
+}
+/* Step 3: falls off the wall */
+.portrait-frame.large.fall {
+  transition: transform 0.55s cubic-bezier(.5,-0.2,.85,.45), opacity 0.5s ease 0.2s;
+  transform: rotate(-30deg) translateY(150px) translateX(-24px);
+  opacity: 0.35;
+}
+
+.kill-portrait-wrap {
+  min-height: 195px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+}
+
+/* Step 4: shatters — shard pieces fly outward from the frame's position */
+.portrait-shard {
+  position: fixed;
+  border-radius: 4px;
+  box-shadow: 0 0 12px rgba(0,0,0,0.5);
+  pointer-events: none;
+  z-index: 850;
+}
+@keyframes shard-fly {
+  0%   { transform: translate(0, 0) rotate(0deg); opacity: 1; }
+  100% { transform: translate(var(--dx, 0px), var(--dy, 80px)) rotate(var(--rot, 60deg)); opacity: 0; }
+}
+
+/* Step 5: spooky vibes — a red skull glow rises where the frame fell */
+.spooky-skull {
+  position: fixed;
+  transform: translate(-50%, -50%) scale(0.6);
+  font-size: 40px;
+  color: var(--red-bright);
+  filter: drop-shadow(0 0 18px rgba(225,75,63,0.9));
+  pointer-events: none;
+  z-index: 840;
+  opacity: 0;
+  animation: skull-rise 1.5s ease forwards;
+}
+@keyframes skull-rise {
+  0%   { opacity: 0;   transform: translate(-50%, -50%)  scale(0.5); }
+  25%  { opacity: 0.9; transform: translate(-50%, -65%)  scale(1); }
+  100% { opacity: 0;   transform: translate(-50%, -150%) scale(1.3); }
+}
+
+.dagger {
+  font-size: 64px;
+  filter: drop-shadow(0 0 20px rgba(225,75,63,0.8));
+  animation: dagger-strike 0.5s ease;
+}
+@keyframes dagger-strike {
+  0% { transform: translateY(-50px) rotate(-35deg); opacity: 0; }
+  60% { transform: translateY(6px) rotate(10deg); opacity: 1; }
+  100% { transform: translateY(0) rotate(0deg); opacity: 1; }
+}
+
+/* ---- kill / elimination overlay ---- */
+.kill-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+.kill-overlay.hidden { display: none; }
+
+.kill-flash {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 45%, rgba(179,35,27,0.55), rgba(11,13,18,0.94) 70%);
+  animation: kill-flash-anim 2.6s ease forwards;
+}
+@keyframes kill-flash-anim {
+  0% { opacity: 0; }
+  10% { opacity: 1; }
+  78% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.kill-content {
+  position: relative;
+  text-align: center;
+  animation: kill-content-anim 2.6s ease forwards;
+}
+@keyframes kill-content-anim {
+  0% { opacity: 0; transform: scale(0.9); }
+  10% { opacity: 1; transform: scale(1); }
+  85% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+.kill-text {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 700;
+  color: var(--red-bright);
+  margin-top: 10px;
+  letter-spacing: 0.02em;
+}
+.kill-subtext { color: var(--muted); font-size: 14px; margin-top: 8px; }
+
+@keyframes screen-shake {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-4px, 2px); }
+  40% { transform: translate(4px, -2px); }
+  60% { transform: translate(-3px, 1px); }
+  80% { transform: translate(3px, -1px); }
+}
+body.shake { animation: screen-shake 0.4s ease; }
+
 /* winner celebration accents */
 #screen-gameover .center-panel { position: relative; }
 #gameOverTitle.accent-gold { text-shadow: 0 0 24px rgba(199,162,74,0.45); }
@@ -631,4 +763,5 @@ body.shake { animation: screen-shake 0.4s ease; }
   .panel { padding: 24px 18px; }
   .title { font-size: 28px; }
   .host-reveal-name { font-size: 24px; }
+  .portrait-frame.large { width: 130px; height: 170px; }
 }

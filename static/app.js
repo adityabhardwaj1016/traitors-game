@@ -4,8 +4,59 @@
 
 const $ = (id) => document.getElementById(id);
 
+// ---- character roster ----------------------------------------------------
+// Cosmetic only. The code tries /static/characters/<id>.jpg first — if that
+// 404s, the gradient + icon placeholder shows through automatically. Drop
+// real art in at that path (matching these ids) and it's used with zero
+// code changes.
+const CHARACTERS = [
+  { id: "c1",  name: "Arjun",   colorA: "#5a2626", colorB: "#241010", icon: "🗡️" },
+  { id: "c2",  name: "Kabir",   colorA: "#28394a", colorB: "#0f1620", icon: "🎭" },
+  { id: "c3",  name: "Dev",     colorA: "#3a2f1e", colorB: "#1c150c", icon: "🕯️" },
+  { id: "c4",  name: "Vivan",   colorA: "#33223a", colorB: "#180f1e", icon: "👑" },
+  { id: "c5",  name: "Neil",    colorA: "#233a2c", colorB: "#0f1a13", icon: "🐺" },
+  { id: "c6",  name: "Meera",   colorA: "#3a1e2c", colorB: "#1c0e15", icon: "🌙" },
+  { id: "c7",  name: "Tara",    colorA: "#1e2c3a", colorB: "#0e1522", icon: "✨" },
+  { id: "c8",  name: "Ishita",  colorA: "#2a3a1e", colorB: "#141c0d", icon: "🦉" },
+  { id: "c9",  name: "Ananya",  colorA: "#3a1e1e", colorB: "#1c0d0d", icon: "🕸️" },
+  { id: "c10", name: "Rhea",    colorA: "#2c1e3a", colorB: "#150e1c", icon: "🔮" },
+  { id: "c11", name: "Diya",    colorA: "#242424", colorB: "#0a0a0a", icon: "🖤" },
+  { id: "c12", name: "Gayatri", colorA: "#3a2e1e", colorB: "#1c150c", icon: "👑" },
+  { id: "c13", name: "Sana",    colorA: "#3a1414", colorB: "#1c0a0a", icon: "🩸" },
+  { id: "c14", name: "Lavanya", colorA: "#14203a", colorB: "#0a101c", icon: "🐦‍⬛" },
+];
+
+function charById(id) {
+  return CHARACTERS.find((c) => c.id === id) || CHARACTERS[0];
+}
+
+let selectedCharacterId = CHARACTERS[0].id;
+
+function renderCharacterGrid() {
+  const el = $("characterGrid");
+  el.innerHTML = "";
+  CHARACTERS.forEach((c) => {
+    const frame = document.createElement("div");
+    frame.className = "portrait-frame small" + (c.id === selectedCharacterId ? " selected" : "");
+    frame.style.setProperty("--seal-a", c.colorA);
+    frame.style.setProperty("--seal-b", c.colorB);
+    frame.innerHTML = `
+      <img class="portrait-photo" src="/static/characters/${c.id}.jpg" alt="" onerror="this.remove()" />
+      <div class="portrait-art">${c.icon}</div>
+      <div class="portrait-name">${c.name}</div>
+    `;
+    frame.addEventListener("click", () => {
+      selectedCharacterId = c.id;
+      document.querySelectorAll("#characterGrid .portrait-frame").forEach((f) => f.classList.remove("selected"));
+      frame.classList.add("selected");
+    });
+    el.appendChild(frame);
+  });
+}
+renderCharacterGrid();
+
 let ws = null;
-let me = { roomCode: null, playerId: null, name: null, isCreator: false, isTraitor: null, locations: [] };
+let me = { roomCode: null, playerId: null, name: null, isCreator: false, isTraitor: null, locations: [], character: null };
 let state = null; // last "state" message from server
 let hasVoted = false;
 let pendingHostReveal = null; // { id, name } while the host-draw animation is showing
@@ -40,6 +91,10 @@ function isMeHost() {
   return !!(state && state.host_id && state.host_id === me.playerId);
 }
 
+function findPlayerById(id) {
+  return (state && state.players.find((p) => p.id === id)) || null;
+}
+
 // ---- ambient embers ---------------------------------------------------
 (function spawnEmbers() {
   const container = $("embers");
@@ -54,7 +109,7 @@ function isMeHost() {
   }
 })();
 
-// ---- avatar seal colors (deterministic per player id) --------------------
+// ---- fallback avatar colors for players missing character data -----------
 const SEAL_PALETTES = [
   ["#3a2230", "#20141c"],
   ["#233a2c", "#141f18"],
@@ -92,11 +147,11 @@ $("btnCreate").addEventListener("click", async () => {
     const res = await fetch("/api/create_room", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ name, character: selectedCharacterId }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || "Failed to create room");
     const data = await res.json();
-    me = { roomCode: data.room_code, playerId: data.player_id, name, isCreator: true, isTraitor: null, locations: [] };
+    me = { roomCode: data.room_code, playerId: data.player_id, name, isCreator: true, isTraitor: null, locations: [], character: selectedCharacterId };
     saveSession();
     connect();
   } catch (e) {
@@ -112,11 +167,11 @@ $("btnJoin").addEventListener("click", async () => {
     const res = await fetch("/api/join_room", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ room_code: code, name }),
+      body: JSON.stringify({ room_code: code, name, character: selectedCharacterId }),
     });
     if (!res.ok) throw new Error((await res.json()).detail || "Failed to join room");
     const data = await res.json();
-    me = { roomCode: data.room_code, playerId: data.player_id, name, isCreator: false, isTraitor: null, locations: [] };
+    me = { roomCode: data.room_code, playerId: data.player_id, name, isCreator: false, isTraitor: null, locations: [], character: selectedCharacterId };
     saveSession();
     connect();
   } catch (e) {
@@ -192,7 +247,7 @@ function handleMessage(msg) {
       showScreen("screen-host-reveal");
       break;
     case "night_reveal":
-      playKillOverlay({ name: msg.victim_name, isMe: msg.victim_id === me.playerId, cause: "night" });
+      playKillOverlay({ id: msg.victim_id, name: msg.victim_name, isMe: msg.victim_id === me.playerId, cause: "night" });
       ticker(`☠ ${msg.victim_name} was found dead in ${msg.crime_location}.`);
       break;
     case "investigation_start":
@@ -214,6 +269,7 @@ function handleMessage(msg) {
       break;
     case "vote_result":
       playKillOverlay({
+        id: msg.eliminated_id,
         name: msg.eliminated_name,
         isMe: msg.eliminated_id === me.playerId,
         cause: "vote",
@@ -260,11 +316,36 @@ function updateSpectatorBadge() {
   chatInput.placeholder = spectating ? "Spectators can't send messages" : "Say something…";
 }
 
-// ---- kill / elimination animation --------------------------------------
-function playKillOverlay({ name, isMe, cause, wasTraitor }) {
+// ---------------------------------------------------------------------------
+// Kill / elimination animation — 5 beats:
+//   1. Normal   — the victim's framed portrait appears
+//   2. Tilts    — the frame tilts as if knocked
+//   3. Falls    — it falls off the wall
+//   4. Shatters — it breaks into pieces that fly outward
+//   5. Spooky   — a red skull glow rises through the smoke
+// ---------------------------------------------------------------------------
+
+function playKillOverlay({ id, name, isMe, cause, wasTraitor }) {
   const overlay = $("killOverlay");
   const textEl = $("killOverlayText");
   const subEl = $("killOverlaySubtext");
+  const wrap = $("killPortraitWrap");
+
+  const victim = findPlayerById(id);
+  const c = victim && victim.character ? charById(victim.character) : null;
+
+  wrap.innerHTML = "";
+  if (c) {
+    wrap.innerHTML = `
+      <div class="portrait-frame large" id="fallingPortrait" style="--seal-a:${c.colorA};--seal-b:${c.colorB}">
+        <img class="portrait-photo" src="/static/characters/${c.id}.jpg" alt="" onerror="this.remove()" />
+        <div class="portrait-art">${c.icon}</div>
+        <div class="portrait-name">${escapeHtml(name)}</div>
+      </div>
+    `;
+  } else {
+    wrap.innerHTML = `<div class="dagger">🗡</div>`;
+  }
 
   if (isMe) {
     textEl.textContent = "You have been eliminated";
@@ -280,7 +361,66 @@ function playKillOverlay({ name, isMe, cause, wasTraitor }) {
   document.body.classList.add("shake");
   if (window.TraitorsAudio) TraitorsAudio.playKill();
   setTimeout(() => document.body.classList.remove("shake"), 450);
-  setTimeout(() => overlay.classList.add("hidden"), 2300);
+
+  if (c) runFrameFallSequence($("fallingPortrait"));
+
+  setTimeout(() => overlay.classList.add("hidden"), 2700);
+}
+
+function runFrameFallSequence(el) {
+  if (!el) return;
+  // Beat 2: tilt
+  requestAnimationFrame(() => el.classList.add("tilt"));
+  // Beat 3: fall
+  setTimeout(() => el.classList.add("fall"), 380);
+  // Beat 4 + 5: shatter, then the spooky skull glow
+  setTimeout(() => shatterPortrait(el), 900);
+}
+
+function shatterPortrait(el) {
+  if (!el || !el.isConnected) return;
+  const rect = el.getBoundingClientRect();
+  const framePalette = { a: el.style.getPropertyValue("--seal-a"), b: el.style.getPropertyValue("--seal-b") };
+  el.style.visibility = "hidden";
+
+  const CLIP_POLYS = [
+    "polygon(0 0, 60% 0, 40% 55%, 0 40%)",
+    "polygon(60% 0, 100% 0, 100% 45%, 40% 55%)",
+    "polygon(0 40%, 40% 55%, 30% 100%, 0 100%)",
+    "polygon(40% 55%, 100% 45%, 100% 100%, 55% 100%)",
+    "polygon(30% 100%, 55% 100%, 65% 70%, 40% 55%)",
+    "polygon(100% 45%, 100% 100%, 55% 100%, 65% 70%)",
+    "polygon(0 0, 40% 0, 20% 30%, 0 20%)",
+  ];
+
+  CLIP_POLYS.forEach((clip) => {
+    const shard = document.createElement("div");
+    shard.className = "portrait-shard";
+    shard.style.left = rect.left + "px";
+    shard.style.top = rect.top + "px";
+    shard.style.width = rect.width + "px";
+    shard.style.height = rect.height + "px";
+    shard.style.background = `linear-gradient(135deg, ${framePalette.a}, ${framePalette.b})`;
+    shard.style.clipPath = clip;
+    const dx = (Math.random() * 220 - 110).toFixed(0) + "px";
+    const dy = (90 + Math.random() * 150).toFixed(0) + "px";
+    const rot = (Math.random() * 260 - 130).toFixed(0) + "deg";
+    shard.style.setProperty("--dx", dx);
+    shard.style.setProperty("--dy", dy);
+    shard.style.setProperty("--rot", rot);
+    shard.style.animation = `shard-fly ${(0.6 + Math.random() * 0.3).toFixed(2)}s ease forwards`;
+    document.body.appendChild(shard);
+    setTimeout(() => shard.remove(), 1300);
+  });
+
+  // Beat 5: spooky vibes — the skull glow rises from where the frame fell
+  const skull = document.createElement("div");
+  skull.className = "spooky-skull";
+  skull.textContent = "💀";
+  skull.style.left = (rect.left + rect.width / 2) + "px";
+  skull.style.top = (rect.top + rect.height / 2) + "px";
+  document.body.appendChild(skull);
+  setTimeout(() => skull.remove(), 1700);
 }
 
 function ticker(text) {
@@ -439,7 +579,7 @@ function render() {
         $("votingList").innerHTML = "";
       } else {
         $("votedNotice").classList.add("hidden");
-        renderVotingList(state.players.filter((p) => p.alive && !p.is_host && p.id !== me.playerId ? true : (p.alive && !p.is_host)));
+        renderVotingList(state.players.filter((p) => p.alive && !p.is_host && p.id !== me.playerId));
       }
       break;
 
@@ -467,8 +607,16 @@ function render() {
 // ---- render helpers --------------------------------------------------
 
 function sealFor(p) {
+  if (p.character) {
+    const c = charById(p.character);
+    return `style="--seal-a:${c.colorA};--seal-b:${c.colorB}"`;
+  }
   const [a, b] = sealColorsFor(p.id);
   return `style="--seal-a:${a};--seal-b:${b}"`;
+}
+
+function sealContent(p) {
+  return p.character ? charById(p.character).icon : p.name.charAt(0).toUpperCase();
 }
 
 function renderPlayerList(containerId, players, showDeadTag) {
@@ -478,7 +626,7 @@ function renderPlayerList(containerId, players, showDeadTag) {
     const row = document.createElement("div");
     row.className = "player-row" + (!p.alive ? " dead" : "");
     row.innerHTML = `
-      <div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div>
+      <div class="seal" ${sealFor(p)}>${sealContent(p)}</div>
       <div class="player-name">${escapeHtml(p.name)}${p.id === me.playerId ? " (you)" : ""}</div>
       ${p.is_host ? '<span class="player-tag host-tag">HOST</span>' : ""}
       ${!p.alive && showDeadTag ? '<span class="player-tag">ELIMINATED</span>' : ""}
@@ -494,7 +642,7 @@ function renderSelectList(players) {
   players.forEach((p) => {
     const row = document.createElement("div");
     row.className = "player-row";
-    row.innerHTML = `<div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
+    row.innerHTML = `<div class="seal" ${sealFor(p)}>${sealContent(p)}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
     row.addEventListener("click", () => {
       send({ type: "select_traitor", target_id: p.id });
     });
@@ -509,7 +657,7 @@ function renderKillList(players) {
   players.forEach((p) => {
     const row = document.createElement("div");
     row.className = "player-row" + (selectedKillTarget === p.id ? " chosen" : "");
-    row.innerHTML = `<div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
+    row.innerHTML = `<div class="seal" ${sealFor(p)}>${sealContent(p)}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
     row.addEventListener("click", () => {
       selectedKillTarget = p.id;
       renderKillList(players);
@@ -583,7 +731,7 @@ function renderInvestigationScreen(amAlive) {
       targets.forEach((p) => {
         const row = document.createElement("div");
         row.className = "player-row" + (selectedInspectTarget === p.id ? " chosen" : "");
-        row.innerHTML = `<div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
+        row.innerHTML = `<div class="seal" ${sealFor(p)}>${sealContent(p)}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
         row.addEventListener("click", () => {
           selectedInspectTarget = p.id;
           send({ type: "inspect", target_id: p.id });
@@ -609,7 +757,7 @@ function renderInvestigationScreen(amAlive) {
       targets.forEach((p) => {
         const row = document.createElement("div");
         row.className = "player-row";
-        row.innerHTML = `<div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
+        row.innerHTML = `<div class="seal" ${sealFor(p)}>${sealContent(p)}</div><div class="player-name">${escapeHtml(p.name)}</div>`;
         row.addEventListener("click", () => {
           send({ type: "sabotage", target_id: p.id });
         });
@@ -668,7 +816,7 @@ function renderVotingList(players) {
   players.forEach((p) => {
     const row = document.createElement("div");
     row.className = "player-row";
-    row.innerHTML = `<div class="seal" ${sealFor(p)}>${p.name.charAt(0).toUpperCase()}</div><div class="player-name">${escapeHtml(p.name)}${p.id === me.playerId ? " (you)" : ""}</div>`;
+    row.innerHTML = `<div class="seal" ${sealFor(p)}>${sealContent(p)}</div><div class="player-name">${escapeHtml(p.name)}${p.id === me.playerId ? " (you)" : ""}</div>`;
     row.addEventListener("click", () => {
       hasVoted = true;
       send({ type: "cast_vote", target_id: p.id });

@@ -29,6 +29,9 @@ can launder a dirty result, and an innocent player can simply have been
 assigned the same location as the crime by chance. Players have to compare
 notes out loud to build a case.
 
+Each player also picks a character (a portrait id) when they join — purely
+cosmetic, used for their avatar and the elimination animation.
+
 State is kept in memory per room. Swap `ROOMS` for Redis if you ever
 need multiple server processes / persistence.
 """
@@ -75,9 +78,10 @@ LOCATIONS = [
 # ---------------------------------------------------------------------------
 
 class Player:
-    def __init__(self, player_id: str, name: str):
+    def __init__(self, player_id: str, name: str, character: str = "c1"):
         self.id = player_id
         self.name = name
+        self.character = character  # cosmetic portrait id, e.g. "c1"
         self.is_host = False  # decided randomly when the game starts
         self.alive = True
         self.connected = True
@@ -86,6 +90,7 @@ class Player:
         return {
             "id": self.id,
             "name": self.name,
+            "character": self.character,
             "is_host": self.is_host,
             "alive": self.alive,
             "connected": self.connected,
@@ -249,11 +254,13 @@ def new_player_id() -> str:
 
 class CreateRoomBody(BaseModel):
     name: str
+    character: str = "c1"
 
 
 class JoinRoomBody(BaseModel):
     room_code: str
     name: str
+    character: str = "c1"
 
 
 @app.post("/api/create_room")
@@ -264,7 +271,7 @@ def create_room(body: CreateRoomBody):
     code = gen_room_code()
     creator_id = new_player_id()
     room = Room(code, creator_id)
-    room.players[creator_id] = Player(creator_id, name)
+    room.players[creator_id] = Player(creator_id, name, character=body.character)
     ROOMS[code] = room
     return {"room_code": code, "player_id": creator_id, "is_creator": True}
 
@@ -283,7 +290,7 @@ def join_room(body: JoinRoomBody):
     if any(p.name.lower() == name.lower() for p in room.players.values()):
         raise HTTPException(400, "Name already taken in this room")
     pid = new_player_id()
-    room.players[pid] = Player(pid, name)
+    room.players[pid] = Player(pid, name, character=body.character)
     return {"room_code": code, "player_id": pid, "is_creator": False}
 
 

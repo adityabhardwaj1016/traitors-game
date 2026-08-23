@@ -2,26 +2,32 @@
 Traitors — a social deduction party game.
 
 Flow:
-  LOBBY -> creator starts the game -> server randomly picks a HOST from
-           everyone in the room -> host picks the traitor (SELECT_TRAITOR)
+  LOBBY -> creator starts the game -> the COMPUTER instantly and randomly
+           picks the Traitor from everyone in the room, in secret
   -> NIGHT (traitor privately picks a victim + a crime location)
-  -> REVEAL (victim announced to everyone)
+  -> the kill reveals automatically the moment the Traitor confirms it
+     (no human host/moderator exists in this version — every player is
+     an equal participant)
   -> INVESTIGATION (everyone gets a secret real location for the night,
      submits a public alibi claim — true or false — and may spend one
      Inspect on another player for a clue; the Traitor may Sabotage one
-     player instead, to make inspections of them come back clean)
+     player instead, to make inspections of them come back clean). This
+     phase auto-advances to Discussion the moment every alive player has
+     submitted their alibi.
   -> DISCUSSION (the Evidence Board is revealed: crime location + everyone's
      public alibi claims, side by side; each player also still has whatever
-     private inspection results they personally collected)
-  -> VOTING (everyone votes, majority eliminated)
+     private inspection results they personally collected). Every alive
+     player taps "Ready to Move On"; once all have, Voting begins.
+  -> VOTING (everyone votes, majority eliminated; tallies automatically
+     once every alive player has voted)
   -> back to NIGHT, or GAME_OVER
 
 Nobody chooses to "be the host" when they join — everyone just creates or
-joins a room as an equal. Once enough people are in the lobby, the person
-who created the room starts the game, and the server randomly draws one
-player to be that round's host/moderator. The host then privately picks
-the Traitor. This keeps host duties from being a role people fight over or
-predict, and it's re-drawn fresh every time a new game starts in the room.
+joins a room as an equal, and stays an equal, playable participant for the
+whole game. The room's creator only has one bit of extra power: they can
+tap "Seal the Circle" to start the game (and "Play Again" to start a
+rematch) — beyond that they're just as likely as anyone to be drawn as the
+Traitor.
 
 The Investigation System is designed to create suspicion, not certainty:
 a clue can point at the Traitor, but it is never proof by itself — Sabotage
@@ -57,8 +63,8 @@ app.add_middleware(
 )
 
 # Minimum number of people who must be in the room before the game can
-# start. One of them will be drawn as host, so this guarantees at least
-# 3 real players remain once the host is set aside.
+# start. There's no host set aside anymore, so this is purely "how many
+# players make for a good round" — feel free to lower it.
 MIN_PLAYERS_TO_START = 4
 
 # Rooms/locations used for the alibi & investigation system. Names are
@@ -82,7 +88,6 @@ class Player:
         self.id = player_id
         self.name = name
         self.character = character  # cosmetic portrait id, e.g. "c1"
-        self.is_host = False  # decided randomly when the game starts
         self.alive = True
         self.connected = True
 
@@ -91,7 +96,6 @@ class Player:
             "id": self.id,
             "name": self.name,
             "character": self.character,
-            "is_host": self.is_host,
             "alive": self.alive,
             "connected": self.connected,
         }
@@ -100,11 +104,10 @@ class Player:
 class Room:
     def __init__(self, code: str, creator_id: str):
         self.code = code
-        self.creator_id = creator_id  # only used to permit starting the game
+        self.creator_id = creator_id  # only used to permit starting the game / rematch
         self.players: dict[str, Player] = {}
         self.connections: dict[str, WebSocket] = {}
-        self.phase = "LOBBY"  # LOBBY, SELECT_TRAITOR, NIGHT, REVEAL, INVESTIGATION, DISCUSSION, VOTING, GAME_OVER
-        self.host_id: Optional[str] = None  # randomly drawn once the game starts
+        self.phase = "LOBBY"  # LOBBY, NIGHT, INVESTIGATION, DISCUSSION, VOTING, GAME_OVER
         self.traitor_id: Optional[str] = None
         self.victim_id: Optional[str] = None
         self.votes: dict[str, str] = {}  # voter_id -> target_id
@@ -113,7 +116,7 @@ class Room:
         self.log: list[str] = []
 
         # ---- Scoreboard: persists across "Play Again" rematches in this room ----
-        self.scoreboard: dict[str, dict] = {}  # pid -> {name, games_played, wins, times_traitor, traitor_wins, times_hosted}
+        self.scoreboard: dict[str, dict] = {}  # pid -> {name, games_played, wins, times_traitor, traitor_wins}
 
         # ---- Investigation System (reset each round) ----
         self.crime_location: Optional[str] = None
@@ -124,11 +127,15 @@ class Room:
         self.sabotage_available: bool = True
         self.evidence_board: Optional[dict] = None     # populated once DISCUSSION begins
 
+        # ---- Discussion readiness (reset each round) ----
+        self.discussion_ready: set[str] = set()
+
     # ---- helpers -----------------------------------------------------
 
     def alive_players(self):
-        """Alive PLAYERS only — the host is a moderator, not one of the n players."""
-        return [p for p in self.players.values() if p.alive and not p.is_host]
+        """Every alive player is a full participant — there's no separate
+        moderator role in this version."""
+        return [p for p in self.players.values() if p.alive]
 
     def add_log(self, msg: str):
         self.log.append(msg)
@@ -140,6 +147,7 @@ class Room:
         self.sabotage_target = None
         self.sabotage_available = True
         self.evidence_board = None
+        self.discussion_ready = set()
 
     def scoreboard_entry(self, pid: str) -> dict:
         return self.scoreboard.setdefault(pid, {
@@ -148,16 +156,13 @@ class Room:
             "wins": 0,
             "times_traitor": 0,
             "traitor_wins": 0,
-            "times_hosted": 0,
         })
 
     def record_game_result(self):
-        """Called once, right when self.winner is set. Every player except
-        that round's host gets credit for a game played; the Traitor and
-        the innocents split the win depending on who came out on top."""
+        """Called once, right when self.winner is set. Every player gets
+        credit for a game played; the Traitor and the innocents split the
+        win depending on who came out on top."""
         for pid, p in self.players.items():
-            if pid == self.host_id:
-                continue
             entry = self.scoreboard_entry(pid)
             entry["name"] = p.name  # keep display name current
             entry["games_played"] += 1
@@ -198,14 +203,12 @@ class Room:
         the viewer (their own alibi/inspection progress) so the UI stays in
         sync even across reconnects, without leaking who did what to anyone
         else."""
-        host = self.players.get(self.host_id) if self.host_id else None
         return {
             "type": "state",
             "room_code": self.code,
             "phase": self.phase,
             "round": self.round_num,
-            "host_id": self.host_id,
-            "host_name": host.name if host else None,
+            "creator_id": self.creator_id,
             "players": [p.public() for p in self.players.values()],
             "victim_name": self.players[self.victim_id].name if self.victim_id and self.victim_id in self.players else None,
             "winner": self.winner,
@@ -218,6 +221,8 @@ class Room:
             "investigations_used": sum(1 for v in self.has_inspected.values() if v),
             "sabotage_available": self.sabotage_available,
             "evidence_board": self.evidence_board,
+            # Discussion readiness
+            "discussion_ready_ids": list(self.discussion_ready),
             # Scoreboard (persists across rematches in this room)
             "scoreboard": self.scoreboard_list(),
             # Investigation System — personalized to the viewer
@@ -357,6 +362,21 @@ async def begin_investigation(room: Room):
         })
 
 
+def build_evidence_board(room: Room):
+    alibis = [
+        {
+            "id": p.id,
+            "name": p.name,
+            "location": room.alibi_claims.get(p.id, "No alibi given"),
+        }
+        for p in room.alive_players()
+    ]
+    room.evidence_board = {
+        "crime_location": room.crime_location,
+        "alibis": alibis,
+    }
+
+
 async def tally_votes(room: Room):
     if not room.votes:
         room.add_log("No votes were cast — no one is eliminated.")
@@ -429,109 +449,78 @@ async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str):
         while True:
             msg = await websocket.receive_json()
             mtype = msg.get("type")
-
-            # These are re-checked on every message because host_id is only
-            # assigned once the game starts — it isn't fixed at connect time.
             is_creator = player_id == room.creator_id
-            is_current_host = room.host_id is not None and player_id == room.host_id
 
-            # ---- CREATOR: start the game, move LOBBY -> host draw -> SELECT_TRAITOR ----
-            if mtype == "start_game" and is_creator and room.phase == "LOBBY":
-                total_players = len(room.players)
-                if total_players < MIN_PLAYERS_TO_START:
+            # ---- CREATOR: start the game -> COMPUTER instantly draws the Traitor ----
+            if mtype == "start_game":
+                if room.phase != "LOBBY":
+                    await room.send_to(player_id, {"type": "error", "message": "The game has already started."})
+                    continue
+                if not is_creator:
+                    await room.send_to(player_id, {"type": "error", "message": "Only the room's creator can start the game."})
+                    continue
+                if len(room.players) < MIN_PLAYERS_TO_START:
                     await room.send_to(player_id, {
                         "type": "error",
-                        "message": f"Need at least {MIN_PLAYERS_TO_START} players (one is drawn as host).",
+                        "message": f"Need at least {MIN_PLAYERS_TO_START} players to start.",
                     })
                     continue
 
-                # Draw the host at random from everyone in the room.
-                host_id = random.choice(list(room.players.keys()))
-                room.host_id = host_id
-                for pid, p in room.players.items():
-                    p.is_host = (pid == host_id)
-
-                host_player = room.players[host_id]
-                room.phase = "SELECT_TRAITOR"
-                room.add_log(f"{host_player.name} was drawn to host this game.")
-                room.scoreboard_entry(host_id)["times_hosted"] += 1
-
-                await room.broadcast({
-                    "type": "host_announcement",
-                    "host_id": host_id,
-                    "host_name": host_player.name,
-                })
-                await room.broadcast_state()
-                await room.send_to(host_id, {
-                    "type": "choose_traitor_prompt",
-                    "players": [p.public() for p in room.players.values() if p.id != host_id],
-                })
-
-            # ---- HOST: picks who the traitor is ----
-            elif mtype == "select_traitor" and is_current_host and room.phase == "SELECT_TRAITOR":
-                target_id = msg.get("target_id")
-                if target_id not in room.players or room.players[target_id].is_host:
-                    continue
-                room.traitor_id = target_id
+                traitor_id = random.choice(list(room.players.keys()))
+                room.traitor_id = traitor_id
                 room.phase = "NIGHT"
-                room.add_log("The Traitor has been chosen in secret.")
-                await room.send_to(target_id, {"type": "you_are_traitor", "is_traitor": True, "locations": LOCATIONS})
-                for pid in room.players:
-                    if pid != target_id:
-                        await room.send_to(pid, {"type": "you_are_traitor", "is_traitor": False})
-                await room.broadcast_state()
+                room.add_log("Roles have been assigned in secret.")
 
-            # ---- TRAITOR: picks a victim + crime location during NIGHT ----
+                await room.broadcast({"type": "roles_assigned"})
+                await room.broadcast_state()
+                for pid in room.players:
+                    is_t = pid == traitor_id
+                    payload = {"type": "you_are_traitor", "is_traitor": is_t}
+                    if is_t:
+                        payload["locations"] = LOCATIONS
+                    await room.send_to(pid, payload)
+
+            # ---- TRAITOR: picks a victim + crime location during NIGHT; kill reveals instantly ----
             elif mtype == "traitor_kill" and player_id == room.traitor_id and room.phase == "NIGHT":
                 target_id = msg.get("target_id")
                 location = msg.get("location")
                 target = room.players.get(target_id)
-                if not target or not target.alive or target.is_host or target_id == room.traitor_id:
+                if not target or not target.alive or target_id == room.traitor_id:
                     await room.send_to(player_id, {"type": "error", "message": "Invalid target."})
                     continue
                 if location not in LOCATIONS:
                     await room.send_to(player_id, {"type": "error", "message": "Invalid location."})
                     continue
+
                 room.victim_id = target_id
                 room.crime_location = location
-                room.phase = "REVEAL"
-                await room.send_to(room.host_id, {
-                    "type": "host_kill_notice",
+                target.alive = False
+                room.add_log(f"{target.name} was found dead in {location}.")
+
+                winner = check_win_condition(room)
+                await room.broadcast({
+                    "type": "night_reveal",
                     "victim_id": target_id,
                     "victim_name": target.name,
+                    "crime_location": location,
                 })
-                await room.broadcast_state()
 
-            # ---- HOST: reveal the kill, then move into the Investigation ----
-            elif mtype == "reveal_kill" and is_current_host and room.phase == "REVEAL":
-                victim = room.players.get(room.victim_id)
-                if victim:
-                    victim.alive = False
-                    room.add_log(f"{victim.name} was found dead in {room.crime_location}.")
-                    winner = check_win_condition(room)
-                    await room.broadcast({
-                        "type": "night_reveal",
-                        "victim_id": victim.id,
-                        "victim_name": victim.name,
-                        "crime_location": room.crime_location,
-                    })
-                    if winner:
-                        room.phase = "GAME_OVER"
-                        room.winner = winner
-                        room.add_log(f"Game over — {'the Traitor wins!' if winner == 'traitor' else 'the Players win!'}")
-                        room.record_game_result()
-                        await room.broadcast_state()
-                    else:
-                        await begin_investigation(room)
-                        await room.broadcast_state()
+                if winner:
+                    room.phase = "GAME_OVER"
+                    room.winner = winner
+                    room.add_log(f"Game over — {'the Traitor wins!' if winner == 'traitor' else 'the Players win!'}")
+                    room.record_game_result()
+                    await room.broadcast_state()
                 else:
+                    await begin_investigation(room)
                     await room.broadcast_state()
 
-            # ---- Any alive player (incl. Traitor): submit a public alibi claim ----
+            # ---- Any alive player (incl. Traitor): submit a public alibi claim.
+            # Auto-advances to Discussion once everyone alive has submitted one. ----
             elif mtype == "submit_alibi" and room.phase == "INVESTIGATION":
                 player = room.players.get(player_id)
                 location = msg.get("location")
-                if not player or player.is_host or not player.alive:
+                if not player or not player.alive:
                     continue
                 if location not in LOCATIONS:
                     await room.send_to(player_id, {"type": "error", "message": "Invalid location."})
@@ -539,18 +528,24 @@ async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str):
                 if player_id in room.alibi_claims:
                     continue
                 room.alibi_claims[player_id] = location
+
+                if len(room.alibi_claims) >= len(room.alive_players()):
+                    build_evidence_board(room)
+                    room.phase = "DISCUSSION"
+                    room.add_log("The Evidence Board has been revealed.")
+
                 await room.broadcast_state()
 
             # ---- Any non-Traitor alive player: spend their one Inspect ----
             elif mtype == "inspect" and room.phase == "INVESTIGATION" and player_id != room.traitor_id:
                 player = room.players.get(player_id)
                 target_id = msg.get("target_id")
-                if not player or player.is_host or not player.alive:
+                if not player or not player.alive:
                     continue
                 if room.has_inspected.get(player_id):
                     continue
                 target = room.players.get(target_id)
-                if not target or target.is_host or not target.alive or target_id == player_id:
+                if not target or not target.alive or target_id == player_id:
                     await room.send_to(player_id, {"type": "error", "message": "Invalid inspection target."})
                     continue
                 room.has_inspected[player_id] = True
@@ -569,7 +564,7 @@ async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str):
                     continue
                 target_id = msg.get("target_id")
                 target = room.players.get(target_id)
-                if not target or target.is_host or not target.alive or target_id == room.traitor_id:
+                if not target or not target.alive or target_id == room.traitor_id:
                     await room.send_to(player_id, {"type": "error", "message": "Invalid sabotage target."})
                     continue
                 room.sabotage_target = target_id
@@ -580,57 +575,41 @@ async def ws_endpoint(websocket: WebSocket, room_code: str, player_id: str):
                 })
                 await room.broadcast_state()
 
-            # ---- HOST: reveal the Evidence Board, move INVESTIGATION -> DISCUSSION ----
-            elif mtype == "start_discussion" and is_current_host and room.phase == "INVESTIGATION":
-                alibis = [
-                    {
-                        "id": p.id,
-                        "name": p.name,
-                        "location": room.alibi_claims.get(p.id, "No alibi given"),
-                    }
-                    for p in room.alive_players()
-                ]
-                room.evidence_board = {
-                    "crime_location": room.crime_location,
-                    "alibis": alibis,
-                }
-                room.phase = "DISCUSSION"
-                room.add_log("The Evidence Board has been revealed.")
-                await room.broadcast_state()
+            # ---- Any alive player: mark themselves ready to leave Discussion.
+            # Once every alive player is ready, Voting begins automatically. ----
+            elif mtype == "end_discussion_ready" and room.phase == "DISCUSSION":
+                player = room.players.get(player_id)
+                if not player or not player.alive:
+                    continue
+                room.discussion_ready.add(player_id)
 
-            # ---- HOST: move DISCUSSION -> VOTING ----
-            elif mtype == "start_voting" and is_current_host and room.phase == "DISCUSSION":
-                room.phase = "VOTING"
-                room.votes = {}
-                room.add_log("Voting has begun.")
+                if len(room.discussion_ready) >= len(room.alive_players()):
+                    room.phase = "VOTING"
+                    room.votes = {}
+                    room.add_log("Voting has begun.")
+
                 await room.broadcast_state()
 
             # ---- Any alive player: cast a vote ----
             elif mtype == "cast_vote" and room.phase == "VOTING":
                 voter = room.players.get(player_id)
                 target_id = msg.get("target_id")
-                if not voter or voter.is_host or not voter.alive or target_id not in room.players:
+                if not voter or not voter.alive or target_id not in room.players:
                     continue
                 target = room.players[target_id]
-                if not target.alive or target.is_host:
+                if not target.alive:
                     continue
                 room.votes[player_id] = target_id
                 await room.broadcast_state()
                 if len(room.votes) >= len(room.alive_players()):
                     await tally_votes(room)
 
-            # ---- HOST: force-tally votes early ----
-            elif mtype == "force_tally" and is_current_host and room.phase == "VOTING":
-                await tally_votes(room)
-
             # ---- CREATOR: rematch — reset the room to LOBBY, keeping everyone
-            # and the scoreboard, ready for a fresh random host + traitor draw ----
+            # and the scoreboard, ready for a fresh random Traitor draw ----
             elif mtype == "play_again" and is_creator and room.phase == "GAME_OVER":
                 for p in room.players.values():
                     p.alive = True
-                    p.is_host = False
                 room.phase = "LOBBY"
-                room.host_id = None
                 room.traitor_id = None
                 room.victim_id = None
                 room.votes = {}

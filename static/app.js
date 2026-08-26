@@ -217,6 +217,7 @@ function connect() {
   ws.onopen = () => {
     $("roomBadge").classList.remove("hidden");
     $("roomCodeText").textContent = me.roomCode;
+    $("btnLeave").classList.remove("hidden");
   };
 
   ws.onmessage = (event) => {
@@ -853,6 +854,48 @@ function renderScoreboard(scoreboard) {
     el.appendChild(row);
   });
 }
+
+// ---- leave game: escape hatch for a stuck/paused screen -------------------
+// Closes the connection, wipes all local session/game state, and returns to
+// the entry screen. If the game ever gets stuck waiting on someone (a
+// disconnected player, a phase that can't advance, etc.), this lets you
+// back out cleanly instead of being stuck on refresh, which just
+// reconnects you to the same stuck state.
+function leaveGame() {
+  if (!confirm("Leave this game and return to the start screen? You won't be able to rejoin this room.")) {
+    return;
+  }
+  if (ws) {
+    try { ws.close(); } catch (e) {}
+    ws = null;
+  }
+  clearSession();
+  me = { roomCode: null, playerId: null, name: null, isCreator: false, isTraitor: null, locations: [], character: null };
+  state = null;
+  lastPhase = null;
+  hasVoted = false;
+  pendingRoleReveal = false;
+  selectedKillTarget = null;
+  selectedKillLocation = null;
+  selectedAlibi = null;
+  selectedInspectTarget = null;
+  clueLogEntries = [];
+  sabotageNoticeText = "";
+  if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+
+  $("roomBadge").classList.add("hidden");
+  $("spectatorBadge").classList.add("hidden");
+  $("timerBadge").classList.add("hidden");
+  $("btnLeave").classList.add("hidden");
+  $("entryError").classList.add("hidden");
+  $("hostName").value = "";
+  $("joinCode").value = "";
+  $("joinName").value = "";
+
+  updatePalaceScene("LOBBY", null);
+  showScreen("screen-entry");
+}
+$("btnLeave").addEventListener("click", leaveGame);
 
 // ---- action buttons --------------------------------------------------
 $("btnStartGame").addEventListener("click", () => send({ type: "start_game" }));

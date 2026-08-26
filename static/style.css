@@ -167,6 +167,21 @@ body {
 .sound-btn:hover { border-color: var(--gold); color: var(--gold-bright); }
 .sound-btn.on { border-color: rgba(199,162,74,0.4); color: var(--gold-bright); background: rgba(199,162,74,0.08); }
 
+.leave-btn {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-family: var(--font-body);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.leave-btn:hover { border-color: var(--red-bright); color: var(--red-bright); background: rgba(225,75,63,0.08); }
+
 .spectator-badge {
   font-size: 12.5px;
   letter-spacing: 0.04em;
@@ -391,7 +406,7 @@ body {
   50% { opacity: 1; transform: scale(1.05); }
 }
 
-/* ---- host draw reveal ---- */
+/* ---- roles-assigned reveal ---- */
 .host-reveal-panel { position: relative; overflow: hidden; }
 .wax-seal {
   font-size: 46px;
@@ -405,7 +420,7 @@ body {
 }
 .host-reveal-name {
   font-family: var(--font-display);
-  font-size: 30px;
+  font-size: 26px;
   font-weight: 700;
   color: var(--gold-bright);
   margin: 10px 0 16px;
@@ -779,7 +794,7 @@ body.shake { animation: screen-shake 0.4s ease; }
 @media (max-width: 480px) {
   .panel { padding: 24px 18px; }
   .title { font-size: 28px; }
-  .host-reveal-name { font-size: 24px; }
+  .host-reveal-name { font-size: 22px; }
   .portrait-frame.large { width: 130px; height: 170px; }
 }
 
